@@ -1,7 +1,8 @@
+require('dotenv').config();
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, 'cleanflow.db');
+const dbPath = path.resolve(__dirname, process.env.DB_FILE || 'cleanflow.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database:', err.message);
@@ -140,14 +141,19 @@ const seedMockData = async () => {
     try {
         const orderCount = await dbGet("SELECT COUNT(*) as count FROM orders");
         
+        const adminName = process.env.ADMIN_NAME || 'Admin Manager';
+        const adminPhone = process.env.ADMIN_PHONE || 'admin';
+        const adminEmail = process.env.ADMIN_EMAIL || 'admin@luxeclean.com';
+        const adminPassword = process.env.ADMIN_PASSWORD || 'ADMIN123';
+
         // Always seed/verify default Admin account
-        const adminUser = await dbGet("SELECT * FROM users WHERE phone = ?", ['admin']);
+        const adminUser = await dbGet("SELECT * FROM users WHERE phone = ?", [adminPhone]);
         if (!adminUser) {
             await dbRun(
                 'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-                ['Admin Manager', 'admin', 'admin@luxeclean.com', 'ADMIN123', 'admin']
+                [adminName, adminPhone, adminEmail, adminPassword, 'admin']
             );
-            console.log("Seeded default Administrator account (admin/ADMIN123)");
+            console.log(`Seeded default Administrator account (${adminPhone}/${adminPassword})`);
         }
 
         if (orderCount.count === 0) {
