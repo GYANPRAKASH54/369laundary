@@ -353,7 +353,7 @@ app.put('/api/orders/:orderId/metrics', async (req, res) => {
 
         await dbRun(
             'UPDATE orders SET weight = ?, items_count = ?, amount = ?, status = ? WHERE order_id = ?',
-            [parseFloat(finalWeight.toFixed(2)), finalItemsCount, finalAmount, 'processing', orderId]
+            [parseFloat(finalWeight.toFixed(2)), finalItemsCount, finalAmount, 'picked_up', orderId]
         );
 
         console.log(`Weighed order ${orderId}: Weight = ${finalWeight}kg, Count = ${finalItemsCount}, Amount = ₹${finalAmount}`);

@@ -21,6 +21,9 @@
     <!-- Chart.js for Admin Analytics charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- html5-qrcode for QR scanning -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script id="tailwind-config">
@@ -813,12 +816,18 @@
 
                         <!-- Search and Filter Toolbar -->
                         <div class="p-4 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <!-- Search Input with Icon -->
-                            <div class="relative w-full sm:max-w-md">
-                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                    <span class="material-symbols-outlined text-sm">search</span>
-                                </span>
-                                <input type="text" id="admin-search-input" oninput="handleAdminFilterChange()" placeholder="Search by customer name, phone, or order ID..." class="w-full pl-9 pr-4 py-2 border-gray-200 focus:ring-primary rounded-lg text-xs font-medium placeholder-gray-400 bg-white">
+                            <!-- Search Input with Icon and Scan Client QR Button -->
+                            <div class="relative w-full sm:max-w-md flex items-center gap-2">
+                                <div class="relative flex-grow">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                        <span class="material-symbols-outlined text-sm">search</span>
+                                    </span>
+                                    <input type="text" id="admin-search-input" oninput="handleAdminFilterChange()" placeholder="Search by customer name, phone, or order ID..." class="w-full pl-9 pr-4 py-2 border-gray-200 focus:ring-primary rounded-lg text-xs font-medium placeholder-gray-400 bg-white">
+                                </div>
+                                <button type="button" onclick="openQRScannerModal()" class="px-4 py-2 bg-secondary text-white font-bold text-xs rounded-lg hover:bg-opacity-95 flex items-center gap-1.5 shadow-sm transition-colors whitespace-nowrap">
+                                    <span class="material-symbols-outlined text-sm">qr_code_scanner</span>
+                                    Scan Client QR
+                                </button>
                             </div>
                             <!-- Status Filter Dropdown -->
                             <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -891,6 +900,107 @@
             <div class="email-modal-body" id="email-modal-body-container">
                 <!-- Dynamic HTML email loaded here -->
             </div>
+        </div>
+    </div>
+
+    <!-- QR Scanner Modal -->
+    <div id="admin-qr-scanner-modal" class="fixed inset-0 z-[1000] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <span class="font-heading font-extrabold text-primary flex items-center gap-2">
+                    <span class="material-symbols-outlined text-secondary">qr_code_scanner</span>
+                    Logistics QR Scanner
+                </span>
+                <button class="text-gray-400 hover:text-gray-600 text-xl font-bold" onclick="closeQRScannerModal()">&times;</button>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Camera Feed Container -->
+                <div class="relative rounded-xl overflow-hidden bg-gray-900 border border-gray-800 flex flex-col items-center justify-center" style="min-height: 250px;">
+                    <div id="admin-qr-reader" class="w-full"></div>
+                    <div id="admin-qr-camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-gray-950 text-gray-400 gap-2">
+                        <span class="material-symbols-outlined text-4xl text-gray-600 animate-pulse">videocam_off</span>
+                        <p class="text-xs font-bold">Webcam initialization is pending or denied.</p>
+                        <p class="text-[10px] text-gray-500 max-w-[250px]">Grant camera permissions to scan tickets directly, or use the simulation console below.</p>
+                    </div>
+                </div>
+
+                <!-- Simulation Fallback -->
+                <div class="bg-surface-container-low p-4 rounded-xl border border-primary/5 space-y-3">
+                    <h5 class="text-xs font-bold text-primary flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[16px] text-secondary">terminal</span>
+                        QR Code Simulation Terminal
+                    </h5>
+                    <p class="text-[10px] text-gray-500 leading-normal">Simulate a barcode swipe by pasting the customer's digital Order ID directly.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="admin-qr-sim-input" placeholder="e.g. LX-12345" class="flex-grow border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-xs font-medium bg-white">
+                        <button type="button" onclick="triggerQRScanSimulation()" class="bg-primary hover:bg-primary-container text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors">
+                            Simulate Scan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Logs output inside scanner -->
+                <div id="admin-qr-status" class="text-center text-xs font-bold py-2 text-gray-400 bg-gray-50 rounded-lg border border-gray-100">
+                    Scanner status: Ready
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Weigh-In Modal -->
+    <div id="admin-qr-weigh-in-modal" class="fixed inset-0 z-[1100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <span class="font-heading font-extrabold text-primary flex items-center gap-2">
+                    <span class="material-symbols-outlined text-secondary">scale</span>
+                    Pickup Weigh-In Verification
+                </span>
+                <button class="text-gray-400 hover:text-gray-600 text-xl font-bold" onclick="closeQRWeighInModal()">&times;</button>
+            </div>
+            <form onsubmit="submitQRWeighIn(event)" class="p-6 space-y-6">
+                <!-- Order overview card -->
+                <div class="bg-surface-container-low p-4 rounded-xl border border-primary/5 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span id="qr-weigh-order-id" class="text-sm font-bold text-secondary">#LX-XXXXX</span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-primary/10 text-primary uppercase">WEIGHT BASIS</span>
+                    </div>
+                    <div class="text-xs text-primary space-y-1">
+                        <p class="font-bold" id="qr-weigh-cust-name">Customer Name</p>
+                        <p class="text-gray-500" id="qr-weigh-cust-phone">Phone number</p>
+                        <p class="text-[10px] text-gray-400" id="qr-weigh-address">Address details</p>
+                    </div>
+                </div>
+
+                <!-- Services selection list preview -->
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Items requiring weighing</label>
+                    <div id="qr-weigh-items-list" class="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Weight Input fields -->
+                <div class="space-y-2">
+                    <label for="qr-weigh-weight-input" class="text-xs font-bold text-primary block">Enter Actual Basket Weight (kg)</label>
+                    <div class="relative">
+                        <input type="number" step="0.1" min="0.1" id="qr-weigh-weight-input" placeholder="e.g. 4.5" class="w-full border-gray-200 focus:ring-primary rounded-lg py-3 px-4 text-sm font-semibold text-primary pl-4 pr-12 bg-gray-50 focus:bg-white" required>
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">kg</span>
+                    </div>
+                    <span class="text-[10px] text-gray-400 leading-normal block">
+                        <i class="fa-solid fa-circle-info text-secondary"></i> Final invoice amount will be calculated automatically based on this value.
+                    </span>
+                </div>
+
+                <!-- Submit controls -->
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeQRWeighInModal()" class="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-primary rounded-xl font-bold text-xs transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 py-3 bg-primary hover:bg-primary-container text-white rounded-xl font-bold text-xs transition-colors">
+                        Confirm Weight & Pickup
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 

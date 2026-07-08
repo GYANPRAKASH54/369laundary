@@ -476,15 +476,18 @@ async function handleSignInSubmit(e) {
                 showToast(`Signed in successfully. Welcome back, ${currentUser.name}!`, 'success');
             } else {
                 showToast(data.error || "Authentication failed", "danger");
+                alert(data.error || "Authentication failed: Incorrect phone number or password.");
                 playBeep(220, 0.25, 0); 
             }
         } catch (err) {
             console.error("Login API error:", err);
             showToast("Server error connecting to database.", "danger");
+            alert("Server error connecting to database.");
         }
     } else {
         if (phone === 'admin') {
             showToast("Offline mode: Administrator access requires active SQLite backend.", "danger");
+            alert("Offline mode: Administrator access requires active SQLite backend.");
         } else {
             applyLoginState({ name: "Offline Customer", phone, email: "offline@luxeclean.com", role: "customer" });
             showToast("Signed in successfully (Simulated memory mode)", "success");
@@ -542,14 +545,17 @@ async function handleAdminLoginSubmit(e) {
                 switchTab('admin');
             } else {
                 showToast(data.error || "Access denied.", "danger");
+                alert(data.error || "Access denied: Incorrect staff credentials.");
                 playBeep(220, 0.25, 0); 
             }
         } catch (err) {
             console.error("Admin login API error:", err);
             showToast("Server error connecting to database.", "danger");
+            alert("Server error connecting to database.");
         }
     } else {
         showToast("Staff access requires SQLite database connection.", "danger");
+        alert("Staff access requires SQLite database connection.");
     }
 }
 
@@ -1534,7 +1540,7 @@ async function weighAndProcessOrder(orderId) {
         order.weight = parseFloat(simulatedWeight.toFixed(2));
         order.itemsCount = simulatedItemsCount;
         order.amount = simulatedAmount;
-        order.status = 'processing';
+        order.status = 'picked_up';
     }
 
     if (activeOrder && activeOrder.orderId === orderId) {
@@ -1543,13 +1549,13 @@ async function weighAndProcessOrder(orderId) {
             activeOrder.itemsCount = order.itemsCount;
             activeOrder.amount = order.amount;
         }
-        activeOrder.status = 'processing';
+        activeOrder.status = 'picked_up';
         renderActiveOrderTracking();
         updateCustomerActiveBadge();
     }
 
-    showToast(`Order #${orderId} metrics updated! Starting wash.`, "success");
-    sync3DWasherWithOrder('processing');
+    showToast(`Order #${orderId} metrics updated! Pickup confirmed.`, "success");
+    sync3DWasherWithOrder('picked_up');
 
     if (!useLocalFallback) {
         await syncAppData();
@@ -1560,7 +1566,7 @@ async function weighAndProcessOrder(orderId) {
     }
 
     const updatedOrder = orders.find(o => o.orderId === orderId);
-    triggerWhatsAppAPI(updatedOrder, 'processing');
+    triggerWhatsAppAPI(updatedOrder, 'picked_up');
 }
 
 async function advanceOrderStatus(orderId) {
@@ -2418,3 +2424,311 @@ function handleAdminFilterChange() {
     renderAdminOrdersTable();
 }
 window.handleAdminFilterChange = handleAdminFilterChange;
+
+// QR Code Scanning and Status updates workflow
+let html5QrScanner = null;
+let currentWeighInOrder = null;
+
+function openQRScannerModal() {
+    const modal = document.getElementById('admin-qr-scanner-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
+    
+    const statusDiv = document.getElementById('admin-qr-status');
+    if (statusDiv) statusDiv.innerHTML = 'Scanner status: Ready';
+    
+    const placeholder = document.getElementById('admin-qr-camera-placeholder');
+    if (placeholder) placeholder.style.display = 'flex';
+
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    
+    if (typeof Html5Qrcode !== 'undefined') {
+        html5QrScanner = new Html5Qrcode("admin-qr-reader");
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
+                if (placeholder) placeholder.style.display = 'none';
+                
+                html5QrScanner.start(
+                    { facingMode: "environment" },
+                    config,
+                    (decodedText, decodedResult) => {
+                        console.log("QR Scan Success:", decodedText);
+                        playBeep(880, 0.15, 0);
+                        if (statusDiv) statusDiv.innerHTML = `<span class="text-green-600">Scanned: ${decodedText}</span>`;
+                        handleQRScanResult(decodedText.trim());
+                    },
+                    (errorMessage) => {}
+                ).catch(err => {
+                    console.error("Camera start error:", err);
+                    if (placeholder) placeholder.style.display = 'flex';
+                    if (statusDiv) statusDiv.innerText = "Error accessing camera. Use Simulator.";
+                });
+            } else {
+                console.warn("No camera devices found.");
+                if (placeholder) placeholder.style.display = 'flex';
+            }
+        }).catch(err => {
+            console.error("Get cameras error:", err);
+            if (placeholder) placeholder.style.display = 'flex';
+        });
+    } else {
+        console.error("Html5Qrcode library not loaded.");
+    }
+}
+
+function closeQRScannerModal() {
+    const modal = document.getElementById('admin-qr-scanner-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+    
+    if (html5QrScanner) {
+        let stopPromise;
+        try {
+            stopPromise = html5QrScanner.stop();
+        } catch (e) {
+            html5QrScanner = null;
+        }
+        if (stopPromise) {
+            stopPromise.then(() => {
+                console.log("QR Camera stopped.");
+                html5QrScanner = null;
+            }).catch(err => {
+                console.error("QR Camera stop failed:", err);
+                html5QrScanner = null;
+            });
+        }
+    }
+    
+    const simInput = document.getElementById('admin-qr-sim-input');
+    if (simInput) simInput.value = '';
+}
+
+function triggerQRScanSimulation() {
+    const simInput = document.getElementById('admin-qr-sim-input');
+    if (!simInput) return;
+    const value = simInput.value.trim();
+    if (!value) {
+        showToast("Please enter an Order ID for simulation!", "danger");
+        return;
+    }
+    
+    const statusDiv = document.getElementById('admin-qr-status');
+    if (statusDiv) statusDiv.innerHTML = `<span class="text-green-600">Simulated Scan: ${value}</span>`;
+    
+    playBeep(880, 0.1, 0);
+    closeQRScannerModal();
+    handleQRScanResult(value);
+}
+
+async function handleQRScanResult(orderId) {
+    const order = orders.find(o => o.orderId === orderId || o.orderId.toLowerCase() === orderId.toLowerCase());
+    if (!order) {
+        showToast(`Order #${orderId} not found in database!`, "danger");
+        return;
+    }
+    
+    const status = order.status;
+    console.log(`Processing scanned Order #${order.orderId} (Status: ${status})`);
+    
+    const hasWeightItem = order.items.some(item => {
+        const catalogCode = item.service_code || item.serviceCode;
+        return catalogCode.includes('wash_fold') || catalogCode.includes('wash_iron');
+    });
+
+    if (status === 'pending' || status === 'pickup_scheduled') {
+        if (hasWeightItem) {
+            openQRWeighInModal(order);
+        } else {
+            await updateQROrderStatus(order.orderId, 'picked_up', `Order #${order.orderId} quantity verified. Status updated to Picked Up.`);
+        }
+    } else if (status === 'ready' || status === 'out_for_delivery') {
+        await updateQROrderStatus(order.orderId, 'delivered', `Order #${order.orderId} delivery verified. Status updated to Delivered.`);
+    } else if (status === 'picked_up' || status === 'processing') {
+        showToast(`Order #${order.orderId} has already been picked up (Current status: ${status.replace('_', ' ')}).`, "info");
+    } else if (status === 'delivered') {
+        showToast(`Order #${order.orderId} has already been delivered.`, "info");
+    } else if (status === 'cancelled') {
+        showToast(`Order #${order.orderId} was cancelled.`, "danger");
+    }
+}
+
+async function updateQROrderStatus(orderId, nextStatus, successMessage) {
+    if (!useLocalFallback) {
+        try {
+            const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: nextStatus })
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+        } catch (err) {
+            console.error("Update status API error:", err);
+            showToast("Server connection error. Updating status locally.", "warning");
+        }
+    }
+    
+    const order = orders.find(o => o.orderId === orderId);
+    if (order) {
+        order.status = nextStatus;
+        
+        if (activeOrder && activeOrder.orderId === orderId) {
+            activeOrder.status = nextStatus;
+            renderActiveOrderTracking();
+            updateCustomerActiveBadge();
+        }
+        
+        triggerWhatsAppAPI(order, getTemplateTypeForStatus(nextStatus));
+    }
+    
+    renderAdminOrdersTable();
+    updateAdminStats();
+    
+    playBeep(523.25, 0.1, 0);
+    playBeep(659.25, 0.15, 0.08);
+    
+    console.log(successMessage);
+    
+    if (!useLocalFallback) {
+        await syncAppData();
+        await syncEmailLogs();
+    }
+}
+
+function openQRWeighInModal(order) {
+    currentWeighInOrder = order;
+    
+    const modal = document.getElementById('admin-qr-weigh-in-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
+    
+    document.getElementById('qr-weigh-order-id').innerText = `#${order.orderId}`;
+    document.getElementById('qr-weigh-cust-name').innerText = order.customerName;
+    document.getElementById('qr-weigh-cust-phone').innerText = order.customerPhone;
+    document.getElementById('qr-weigh-address').innerText = order.address;
+    
+    const list = document.getElementById('qr-weigh-items-list');
+    if (list) {
+        list.innerHTML = '';
+        order.items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between items-center text-xs p-1.5 bg-gray-50 rounded';
+            div.innerHTML = `
+                <span class="font-medium text-primary">${item.name || item.service_label || item.serviceLabel}</span>
+                <span class="text-secondary font-bold">${item.weight > 0 ? item.weight + ' kg' : 'Weigh Pending'}</span>
+            `;
+            list.appendChild(div);
+        });
+    }
+    
+    const weightInput = document.getElementById('qr-weigh-weight-input');
+    if (weightInput) {
+        weightInput.value = '';
+        weightInput.focus();
+    }
+}
+
+function closeQRWeighInModal() {
+    const modal = document.getElementById('admin-qr-weigh-in-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+    currentWeighInOrder = null;
+}
+
+async function submitQRWeighIn(event) {
+    event.preventDefault();
+    if (!currentWeighInOrder) return;
+    
+    const orderId = currentWeighInOrder.orderId;
+    const weightInput = document.getElementById('qr-weigh-weight-input');
+    if (!weightInput) return;
+    
+    const weightVal = parseFloat(weightInput.value);
+    if (isNaN(weightVal) || weightVal <= 0) {
+        alert("Please enter a valid weight in kg!");
+        return;
+    }
+    
+    closeQRWeighInModal();
+    
+    let payload = { weight: weightVal };
+    
+    if (!useLocalFallback) {
+        try {
+            const res = await fetch(`${API_BASE}/orders/${orderId}/metrics`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+        } catch (err) {
+            console.error("Weigh API error:", err);
+        }
+    }
+    
+    const order = orders.find(o => o.orderId === orderId);
+    if (order) {
+        let simulatedAmount = 0;
+        let simulatedWeight = 0;
+        let simulatedItemsCount = 0;
+
+        order.items.forEach(item => {
+            const catalogItem = priceCatalog[item.serviceCode || item.service_code];
+            if (!catalogItem) return;
+
+            if (catalogItem.unit === 'kg') {
+                item.totalWeight = weightVal;
+                item.weight = weightVal;
+                item.totalPrice = weightVal * catalogItem.price;
+                item.total_price = weightVal * catalogItem.price;
+            }
+            simulatedAmount += item.totalPrice || item.total_price || 0;
+            simulatedWeight += item.totalWeight || item.weight || 0;
+            simulatedItemsCount += item.qty || 1;
+        });
+
+        order.weight = parseFloat(simulatedWeight.toFixed(2));
+        order.amount = simulatedAmount;
+        order.status = 'picked_up';
+        
+        if (activeOrder && activeOrder.orderId === orderId) {
+            activeOrder.weight = order.weight;
+            activeOrder.amount = order.amount;
+            activeOrder.status = 'picked_up';
+            renderActiveOrderTracking();
+            updateCustomerActiveBadge();
+        }
+        
+        triggerWhatsAppAPI(order, getTemplateTypeForStatus('picked_up'));
+    }
+    
+    renderAdminOrdersTable();
+    updateAdminStats();
+    
+    playBeep(523.25, 0.1, 0);
+    playBeep(659.25, 0.15, 0.08);
+    
+    if (!useLocalFallback) {
+        await syncAppData();
+        await syncEmailLogs();
+    }
+}
+
+// Bind QR functions to global scope
+window.openQRScannerModal = openQRScannerModal;
+window.closeQRScannerModal = closeQRScannerModal;
+window.triggerQRScanSimulation = triggerQRScanSimulation;
+window.closeQRWeighInModal = closeQRWeighInModal;
+window.submitQRWeighIn = submitQRWeighIn;
+
