@@ -532,13 +532,14 @@ app.post('/api/orders/:orderId/payment-reminder', async (req, res) => {
 
 
 // MOCK SMTP EMAIL SENDER & LOG PERSISTER
+// MOCK SMTP EMAIL SENDER & LOG PERSISTER
 async function sendMockEmail(order, type) {
     const timestamp = new Date().toLocaleString();
     let subject = '';
     let body = '';
 
-    const orderAmount = order.amount !== undefined ? order.amount : order.amount;
-    const orderWeight = order.weight !== undefined ? order.weight : order.weight;
+    const orderAmount = order.amount !== undefined ? order.amount : 0;
+    const orderWeight = order.weight !== undefined ? order.weight : 0;
     const orderId = order.order_id || order.orderId;
     const customerName = order.customer_name || order.customerName;
     const customerEmail = order.customer_email || order.customerEmail;
@@ -547,19 +548,38 @@ async function sendMockEmail(order, type) {
     const billString = orderAmount > 0 ? `₹${orderAmount.toFixed(2)}` : 'Awaiting weight measurement at facility';
     const weightString = orderWeight > 0 ? `${orderWeight} kg` : 'Awaiting weigh-in';
 
+    // Generate dynamic UPI Scan-to-Pay QR code block if billing is active and payment is UPI
+    let qrSectionHtml = '';
+    if (orderPayment === 'upi' && orderAmount > 0) {
+        const upiUrl = `upi://pay?pa=luxeclean@upi&pn=LuxeClean&am=${orderAmount.toFixed(2)}&cu=INR&tn=Order-${orderId}`;
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUrl)}`;
+        
+        qrSectionHtml = `
+            <div style="margin: 25px 0; padding: 20px; border: 2px dashed #7b5800; border-radius: 12px; background-color: #faf9f6; text-align: center; font-family: sans-serif;">
+                <h4 style="margin: 0 0 8px 0; color: #001726; font-size: 15px; font-weight: bold;">Scan to Pay with UPI</h4>
+                <p style="margin: 0 0 15px 0; font-size: 11px; color: #72787e;">Scan this code using BHIM, Google Pay, PhonePe, Paytm, or any banking app.</p>
+                <div style="display: inline-block; padding: 10px; background-color: #ffffff; border: 1px solid #c2c7cd; border-radius: 8px;">
+                    <img src="${qrApiUrl}" alt="UPI Payment QR" style="display: block; width: 160px; height: 160px;" />
+                </div>
+                <p style="margin: 15px 0 0 0; font-size: 14px; font-weight: bold; color: #001726;">Amount Due: ₹${orderAmount.toFixed(2)}</p>
+                <p style="margin: 4px 0 0 0; font-size: 10px; color: #72787e;">Note: Order #${orderId}</p>
+            </div>
+        `;
+    }
+
     // Build styled HTML Email Template
     const emailHeader = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #c2c7cd; border-radius: 12px; background-color: #ffffff; color: #001726;">
             <div style="text-align: center; border-bottom: 2px solid #7b5800; padding-bottom: 15px; margin-bottom: 20px;">
-                <h2 style="margin: 0; color: #001726; font-size: 24px; letter-spacing: -0.5px;">LuxeClean Fabric Care</h2>
+                <h2 style="margin: 0; color: #001726; font-size: 24px; letter-spacing: -0.5px;">Washing Basket</h2>
                 <p style="margin: 5px 0 0 0; font-size: 12px; color: #72787e;">Order Status Update & Delivery Receipt</p>
             </div>
     `;
 
     const emailFooter = `
             <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #c2c7cd; text-align: center; font-size: 11px; color: #72787e;">
-                <p style="margin: 0;">LuxeClean Automated Mailer. Please do not reply directly to this email.</p>
-                <p style="margin: 5px 0 0 0;">© 2026 LuxeClean.in Inc. All rights reserved.</p>
+                <p style="margin: 0;">Washing Basket Automated Mailer. Please do not reply directly to this email.</p>
+                <p style="margin: 5px 0 0 0;">© 2026 WashingBasket.in Inc. All rights reserved.</p>
             </div>
         </div>
     `;
@@ -570,7 +590,7 @@ async function sendMockEmail(order, type) {
             body = `
                 ${emailHeader}
                 <p>Hello <strong>${customerName}</strong>,</p>
-                <p>Thank you for choosing LuxeClean. We have received your booking and a valet will arrive at your scheduled time slot.</p>
+                <p>Thank you for choosing Washing Basket. We have received your booking and a valet will arrive at your scheduled time slot.</p>
                 <div style="background-color: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0;">
                     <h3 style="margin-top: 0; color: #0f172a; font-size: 14px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 5px;">Booking Details</h3>
                     <p style="margin: 5px 0; font-size: 13px;"><strong>Order Reference:</strong> ${orderId}</p>
@@ -584,7 +604,7 @@ async function sendMockEmail(order, type) {
             break;
         case 'weighed_processing':
         case 'processing':
-            subject = `LuxeClean Weigh-In Complete: Order #${orderId}`;
+            subject = `Washing Basket Weigh-In Complete: Order #${orderId}`;
             body = `
                 ${emailHeader}
                 <p>Hello <strong>${customerName}</strong>,</p>
@@ -596,6 +616,7 @@ async function sendMockEmail(order, type) {
                     <p style="margin: 5px 0; font-size: 13px;"><strong>Total Billing Due:</strong> <span style="color: #10b981; font-weight: bold;">${billString}</span></p>
                     <p style="margin: 5px 0; font-size: 13px;"><strong>Payment Method:</strong> ${orderPayment}</p>
                 </div>
+                ${qrSectionHtml}
                 <p>You can monitor your order tracking live on your interactive dashboard portal.</p>
                 ${emailFooter}
             `;
@@ -610,6 +631,7 @@ async function sendMockEmail(order, type) {
                     <p style="margin: 0; font-size: 13px; color: #065f46;"><strong>Status:</strong> Package ready for delivery valet pickup.</p>
                     <p style="margin: 5px 0 0 0; font-size: 13px; color: #065f46;"><strong>Invoice Total:</strong> ${billString}</p>
                 </div>
+                ${qrSectionHtml}
                 ${emailFooter}
             `;
             break;
@@ -621,11 +643,12 @@ async function sendMockEmail(order, type) {
                 <p>Our delivery valet has left our facility and is on their way to drop off your fresh, clean clothes.</p>
                 <p>Please make sure you have your digital QR Code receipt ready on your phone dashboard so our valet can verify your collection.</p>
                 <p><strong>Total Amount to Pay:</strong> ${billString}</p>
+                ${qrSectionHtml}
                 ${emailFooter}
             `;
             break;
         case 'delivered':
-            subject = `LuxeClean Transaction Receipt: Order #${orderId}`;
+            subject = `Washing Basket Transaction Receipt: Order #${orderId}`;
             body = `
                 ${emailHeader}
                 <p>Hello <strong>${customerName}</strong>,</p>
@@ -652,7 +675,7 @@ async function sendMockEmail(order, type) {
             `;
             break;
         case 'payment_reminder':
-            subject = `LuxeClean Invoice: Payment Reminder (Ref: ${orderId})`;
+            subject = `Washing Basket Invoice: Payment Reminder (Ref: ${orderId})`;
             body = `
                 ${emailHeader}
                 <p>Hello <strong>${customerName}</strong>,</p>
@@ -664,6 +687,7 @@ async function sendMockEmail(order, type) {
                     <p style="margin: 5px 0; font-size: 13px; color: #78350f;"><strong>Total Invoice Amount:</strong> <span style="font-weight: bold; color: #d97706;">${billString}</span></p>
                     <p style="margin: 5px 0; font-size: 13px; color: #78350f;"><strong>Payment Status:</strong> Pending Collection (${orderPayment})</p>
                 </div>
+                ${qrSectionHtml}
                 <p>Please have this amount ready at the time of delivery drop-off. You can pay via Cash or UPI Scan. Thank you!</p>
                 ${emailFooter}
             `;
@@ -672,14 +696,43 @@ async function sendMockEmail(order, type) {
 
     try {
         if (subject && body && customerEmail) {
+            // Write database log first
             await dbRun(
                 'INSERT INTO email_logs (order_id, recipient, subject, body, timestamp) VALUES (?, ?, ?, ?, ?)',
                 [orderId, customerEmail, subject, body, timestamp]
             );
-            console.log(`Mock Email sent to ${customerEmail}: "${subject}"`);
+            console.log(`Email log written in database for ${customerEmail}: "${subject}"`);
+
+            // Dispatch live email via Resend API if API Key is configured
+            const apiKey = process.env.RESEND_API_KEY;
+            if (apiKey && apiKey !== '' && !apiKey.includes('[YOUR')) {
+                const resendResponse = await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        from: 'Washing Basket <onboarding@resend.dev>', // Standard onboarding sandbox sender
+                        to: customerEmail,
+                        subject: subject,
+                        html: body
+                    })
+                });
+
+                if (resendResponse.ok) {
+                    const resendData = await resendResponse.json();
+                    console.log(`✅ Transactional email successfully dispatched via Resend to ${customerEmail}. Message ID: ${resendData.id}`);
+                } else {
+                    const errText = await resendResponse.text();
+                    console.warn(`⚠️ Resend API responded with an error status ${resendResponse.status}:`, errText);
+                }
+            } else {
+                console.log(`ℹ️ Resend API Key is not set in environment. Running in simulated mailer mode.`);
+            }
         }
     } catch (e) {
-        console.error('Error writing mock email log:', e.message);
+        console.error('Error dispatching transactional email:', e.message);
     }
 }
 
