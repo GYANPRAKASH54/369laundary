@@ -50,17 +50,16 @@ class LaundryWasher {
 
         // Scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x070a13);
-        // Fog for depth
-        this.scene.fog = new THREE.FogExp2(0x070a13, 0.05);
+        this.scene.background = null;
 
         // Camera
         this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
         this.camera.position.set(0, 1.2, 5.5);
 
         // Renderer
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setSize(width, height);
+        this.renderer.setClearColor(0x000000, 0);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
