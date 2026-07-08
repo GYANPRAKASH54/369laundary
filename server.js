@@ -623,9 +623,14 @@ function openBrowser(url) {
     });
 }
 
-// Start listening
-app.listen(PORT, () => {
-    console.log(`LuxeClean backend server is listening on port ${PORT}`);
-    console.log(`Web application is live at http://localhost:${PORT}`);
-    openBrowser(`http://localhost:${PORT}`);
-});
+// Start listening conditionally (avoid listening in serverless Vercel environment)
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`LuxeClean backend server is listening on port ${PORT}`);
+        console.log(`Web application is live at http://localhost:${PORT}`);
+        openBrowser(`http://localhost:${PORT}`);
+    });
+}
+
+// Export Express app for Vercel Serverless runtime compatibility
+module.exports = app;

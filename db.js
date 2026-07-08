@@ -2,7 +2,9 @@ require('dotenv').config();
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, process.env.DB_FILE || 'cleanflow.db');
+// Vercel serverless functions have a read-only filesystem except /tmp
+const dbFile = process.env.DB_FILE || (process.env.VERCEL ? '/tmp/cleanflow.db' : 'cleanflow.db');
+const dbPath = path.isAbsolute(dbFile) ? dbFile : path.resolve(__dirname, dbFile);
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database:', err.message);
