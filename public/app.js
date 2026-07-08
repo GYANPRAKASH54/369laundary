@@ -2744,3 +2744,17 @@ window.triggerQRScanSimulation = triggerQRScanSimulation;
 window.closeQRWeighInModal = closeQRWeighInModal;
 window.submitQRWeighIn = submitQRWeighIn;
 
+function togglePasswordVisibility(inputId, btnEl) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const iconSpan = btnEl.querySelector('.material-symbols-outlined');
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (iconSpan) iconSpan.innerText = 'visibility_off';
+    } else {
+        input.type = 'password';
+        if (iconSpan) iconSpan.innerText = 'visibility';
+    }
+}
+window.togglePasswordVisibility = togglePasswordVisibility;
+

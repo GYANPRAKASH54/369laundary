@@ -1,36 +1,102 @@
 require('dotenv').config();
 const path = require('path');
 
+const isPostgres = !!process.env.DATABASE_URL;
+let pgPool = null;
+
+if (isPostgres) {
+    const { Pool } = require('pg');
+    pgPool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+    console.log("Supabase/PostgreSQL database pool initialized.");
+}
+
 let sqlite3;
 let db = null;
 let sqliteError = null;
 
-try {
-    sqlite3 = require('sqlite3').verbose();
-} catch (err) {
-    sqliteError = err;
-    console.error("Failed to load sqlite3 native binary. Database queries will be disabled:", err.message);
+if (!isPostgres) {
+    try {
+        sqlite3 = require('sqlite3').verbose();
+    } catch (err) {
+        sqliteError = err;
+        console.error("Failed to load sqlite3 native binary. Database queries will be disabled:", err.message);
+    }
+
+    // Vercel serverless functions have a read-only filesystem except /tmp
+    const dbFile = process.env.DB_FILE || (process.env.VERCEL ? '/tmp/cleanflow.db' : 'cleanflow.db');
+    const dbPath = path.isAbsolute(dbFile) ? dbFile : path.resolve(__dirname, dbFile);
+
+    if (sqlite3) {
+        db = new sqlite3.Database(dbPath, (err) => {
+            if (err) {
+                console.error('Error opening SQLite database:', err.message);
+            } else {
+                console.log('Connected to the SQLite database at:', dbPath);
+            }
+        });
+    } else {
+        console.warn("Running in memory-only backend mode (SQLite failed to initialize).");
+    }
 }
 
-// Vercel serverless functions have a read-only filesystem except /tmp
-const dbFile = process.env.DB_FILE || (process.env.VERCEL ? '/tmp/cleanflow.db' : 'cleanflow.db');
-const dbPath = path.isAbsolute(dbFile) ? dbFile : path.resolve(__dirname, dbFile);
+// SQL Query and Parameters translator for PostgreSQL/Supabase
+function translateSqlAndParams(sql, params) {
+    if (!isPostgres) return { sql, params };
 
-if (sqlite3) {
-    db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-            console.error('Error opening database:', err.message);
-        } else {
-            console.log('Connected to the SQLite database at:', dbPath);
+    let pgSql = sql;
+    
+    // Replace ? placeholders with $1, $2, $3...
+    let index = 1;
+    pgSql = pgSql.replace(/\?/g, () => `$${index++}`);
+
+    // Map SQLite "INSERT OR IGNORE INTO users" to PostgreSQL "INSERT INTO users ... ON CONFLICT (phone) DO NOTHING"
+    if (pgSql.includes("INSERT OR IGNORE INTO users")) {
+        pgSql = pgSql.replace("INSERT OR IGNORE INTO users", "INSERT INTO users") + " ON CONFLICT (phone) DO NOTHING";
+    }
+
+    // Map SQLite "INSERT OR IGNORE INTO addresses" to PostgreSQL "INSERT INTO addresses ... ON CONFLICT DO NOTHING"
+    if (pgSql.includes("INSERT OR IGNORE INTO addresses")) {
+        pgSql = pgSql.replace("INSERT OR IGNORE INTO addresses", "INSERT INTO addresses") + " ON CONFLICT DO NOTHING";
+    }
+
+    // Map auto-increment logic
+    pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY");
+
+    // For INSERT queries on PostgreSQL, append "RETURNING id" if it doesn't already have RETURNING
+    if (pgSql.trim().toLowerCase().startsWith("insert into")) {
+        if (!pgSql.toLowerCase().includes("returning")) {
+            pgSql += " RETURNING *";
         }
-    });
-} else {
-    console.warn("Running in memory-only backend mode (SQLite failed to initialize).");
+    }
+
+    return { sql: pgSql, params };
 }
 
-// Helper functions wrapping sqlite3 methods in Promises
+// Helper functions wrapping database execution in Promises
 const dbRun = (sql, params = []) => {
     return new Promise((resolve, reject) => {
+        if (isPostgres) {
+            const { sql: pgSql, params: pgParams } = translateSqlAndParams(sql, params);
+            pgPool.query(pgSql, pgParams, (err, result) => {
+                if (err) {
+                    console.error("Postgres dbRun Error:", err.message, "SQL:", pgSql);
+                    reject(err);
+                } else {
+                    const lastRow = result.rows[0];
+                    resolve({ 
+                        id: lastRow ? lastRow.id : null, 
+                        changes: result.rowCount 
+                    });
+                }
+            });
+            return;
+        }
+
         if (!db) {
             resolve({ id: 1, changes: 1 });
             return;
@@ -47,6 +113,19 @@ const dbRun = (sql, params = []) => {
 
 const dbAll = (sql, params = []) => {
     return new Promise((resolve, reject) => {
+        if (isPostgres) {
+            const { sql: pgSql, params: pgParams } = translateSqlAndParams(sql, params);
+            pgPool.query(pgSql, pgParams, (err, result) => {
+                if (err) {
+                    console.error("Postgres dbAll Error:", err.message, "SQL:", pgSql);
+                    reject(err);
+                } else {
+                    resolve(result.rows);
+                }
+            });
+            return;
+        }
+
         if (!db) {
             resolve([]);
             return;
@@ -63,8 +142,20 @@ const dbAll = (sql, params = []) => {
 
 const dbGet = (sql, params = []) => {
     return new Promise((resolve, reject) => {
+        if (isPostgres) {
+            const { sql: pgSql, params: pgParams } = translateSqlAndParams(sql, params);
+            pgPool.query(pgSql, pgParams, (err, result) => {
+                if (err) {
+                    console.error("Postgres dbGet Error:", err.message, "SQL:", pgSql);
+                    reject(err);
+                } else {
+                    resolve(result.rows[0] || null);
+                }
+            });
+            return;
+        }
+
         if (!db) {
-            // Mock default admin user check to return null so it doesn't seed, but mock authentication requests dynamically
             if (sql.includes("FROM users WHERE phone = ?") && params[0] === 'admin') {
                 resolve({ name: 'Admin Manager', phone: 'admin', email: 'admin@luxeclean.com', password: 'ADMIN123', role: 'admin' });
             } else {
@@ -84,6 +175,82 @@ const dbGet = (sql, params = []) => {
 
 // Initialize schema
 const initDb = async () => {
+    if (isPostgres) {
+        try {
+            await dbRun(`
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    phone TEXT UNIQUE NOT NULL,
+                    email TEXT NOT NULL,
+                    password TEXT NOT NULL,
+                    role TEXT DEFAULT 'customer'
+                )
+            `);
+
+            await dbRun(`
+                CREATE TABLE IF NOT EXISTS addresses (
+                    id SERIAL PRIMARY KEY,
+                    user_phone TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    address_line TEXT NOT NULL
+                )
+            `);
+
+            await dbRun(`
+                CREATE TABLE IF NOT EXISTS orders (
+                    order_id TEXT PRIMARY KEY,
+                    customer_name TEXT NOT NULL,
+                    customer_phone TEXT NOT NULL,
+                    customer_email TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    slot TEXT NOT NULL,
+                    address TEXT NOT NULL,
+                    address_type TEXT NOT NULL,
+                    payment TEXT NOT NULL,
+                    weight REAL NOT NULL,
+                    items_count INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    status TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    latitude REAL DEFAULT 0.0,
+                    longitude REAL DEFAULT 0.0
+                )
+            `);
+
+            await dbRun(`
+                CREATE TABLE IF NOT EXISTS order_items (
+                    id SERIAL PRIMARY KEY,
+                    order_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    qty INTEGER NOT NULL,
+                    weight REAL NOT NULL,
+                    service_code TEXT NOT NULL,
+                    service_label TEXT NOT NULL,
+                    unit_price REAL NOT NULL,
+                    total_price REAL NOT NULL
+                )
+            `);
+
+            await dbRun(`
+                CREATE TABLE IF NOT EXISTS email_logs (
+                    id SERIAL PRIMARY KEY,
+                    order_id TEXT NOT NULL,
+                    recipient TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
+                )
+            `);
+
+            console.log('PostgreSQL database tables verified/created successfully.');
+            await seedMockData();
+        } catch (e) {
+            console.error("Failed to initialize PostgreSQL tables:", e.message);
+        }
+        return;
+    }
+
     if (!db) {
         console.warn("Database initialization skipped (No active SQLite connection).");
         return;
