@@ -10,6 +10,11 @@ let activeAddressType = 'home';
 let chartInstance = null;
 let activeLogTab = 'wa';
 let activeCoupon = null;
+let availableCoupons = [
+    { code: 'WELCOME10', type: 'percent', value: 10 },
+    { code: 'LAUNDRY20', type: 'percent', value: 20 },
+    { code: 'FREESHIP', type: 'flat', value: 50 }
+];
 
 // Three.js washer instance
 let washer3D = null;
@@ -3011,8 +3016,9 @@ function switchAdminSubTab(tab) {
     // Toggle buttons class
     const btnCust = document.getElementById('admin-subtab-btn-customers');
     const btnVal = document.getElementById('admin-subtab-btn-valets');
+    const btnCoup = document.getElementById('admin-subtab-btn-coupons');
     
-    if (btnCust && btnVal) {
+    if (btnCust && btnVal && btnCoup) {
         btnCust.classList.toggle('bg-white', tab === 'customers');
         btnCust.classList.toggle('text-primary', tab === 'customers');
         btnCust.classList.toggle('shadow-sm', tab === 'customers');
@@ -3022,22 +3028,33 @@ function switchAdminSubTab(tab) {
         btnVal.classList.toggle('text-primary', tab === 'valets');
         btnVal.classList.toggle('shadow-sm', tab === 'valets');
         btnVal.classList.toggle('text-gray-500', tab !== 'valets');
+
+        btnCoup.classList.toggle('bg-white', tab === 'coupons');
+        btnCoup.classList.toggle('text-primary', tab === 'coupons');
+        btnCoup.classList.toggle('shadow-sm', tab === 'coupons');
+        btnCoup.classList.toggle('text-gray-500', tab !== 'coupons');
     }
     
     // Toggle subpanels display
     const panelCust = document.getElementById('admin-subpanel-customers');
     const panelVal = document.getElementById('admin-subpanel-valets');
+    const panelCoup = document.getElementById('admin-subpanel-coupons');
     
-    if (panelCust && panelVal) {
+    if (panelCust && panelVal && panelCoup) {
         panelCust.classList.toggle('hidden', tab !== 'customers');
         panelCust.classList.toggle('active', tab === 'customers');
         
         panelVal.classList.toggle('hidden', tab !== 'valets');
         panelVal.classList.toggle('active', tab === 'valets');
+
+        panelCoup.classList.toggle('hidden', tab !== 'coupons');
+        panelCoup.classList.toggle('active', tab === 'coupons');
     }
 
     if (tab === 'valets') {
         syncValetsData();
+    } else if (tab === 'coupons') {
+        renderAdminCouponsTable();
     } else {
         syncCustomersData();
     }
@@ -3173,20 +3190,93 @@ function applyCoupon() {
         return;
     }
 
-    const coupons = {
-        'WELCOME10': { code: 'WELCOME10', type: 'percent', value: 10 },
-        'LAUNDRY20': { code: 'LAUNDRY20', type: 'percent', value: 20 },
-        'FREESHIP': { code: 'FREESHIP', type: 'flat', value: 50 }
-    };
+    const found = availableCoupons.find(c => c.code === code);
 
-    if (coupons[code]) {
-        activeCoupon = coupons[code];
+    if (found) {
+        activeCoupon = found;
         renderBasket();
         showToast(`Coupon ${code} applied successfully!`, "success");
         playBeep(660, 0.15, 0);
     } else {
-        showToast("Invalid coupon code. Try WELCOME10 or LAUNDRY20.", "danger");
+        showToast("Invalid coupon code. Please try again.", "danger");
         playBeep(220, 0.25, 0);
     }
 }
 window.applyCoupon = applyCoupon;
+
+function renderAdminCouponsTable() {
+    const tbody = document.getElementById('admin-coupons-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    availableCoupons.forEach((coupon, index) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-100 hover:bg-gray-50/50 transition-colors';
+        tr.innerHTML = `
+            <td class="px-4 py-3 align-middle font-bold text-primary">${coupon.code}</td>
+            <td class="px-4 py-3 align-middle font-semibold text-gray-600">${coupon.type === 'percent' ? 'Percentage OFF (%)' : 'Flat Discount (₹)'}</td>
+            <td class="px-4 py-3 align-middle font-bold text-secondary">${coupon.type === 'percent' ? coupon.value + '%' : '₹' + coupon.value}</td>
+            <td class="px-4 py-3 align-middle text-right space-x-2">
+                <button type="button" onclick="editCoupon(${index})" class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded text-[10px] font-bold text-primary transition-colors">Edit</button>
+                <button type="button" onclick="deleteCoupon(${index})" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 rounded text-[10px] font-bold text-red-600 transition-colors">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+window.renderAdminCouponsTable = renderAdminCouponsTable;
+
+function editCoupon(index) {
+    const coupon = availableCoupons[index];
+    document.getElementById('coupon-edit-index').value = index;
+    document.getElementById('admin-coupon-code').value = coupon.code;
+    document.getElementById('admin-coupon-type').value = coupon.type;
+    document.getElementById('admin-coupon-value').value = coupon.value;
+}
+window.editCoupon = editCoupon;
+
+function deleteCoupon(index) {
+    if (confirm(`Are you sure you want to delete coupon ${availableCoupons[index].code}?`)) {
+        availableCoupons.splice(index, 1);
+        renderAdminCouponsTable();
+        showToast("Coupon deleted successfully.", "success");
+    }
+}
+window.deleteCoupon = deleteCoupon;
+
+function resetCouponForm() {
+    document.getElementById('coupon-edit-index').value = "-1";
+    document.getElementById('admin-coupon-code').value = "";
+    document.getElementById('admin-coupon-type').value = "percent";
+    document.getElementById('admin-coupon-value').value = "";
+}
+window.resetCouponForm = resetCouponForm;
+
+function handleSaveCoupon(e) {
+    e.preventDefault();
+    const index = parseInt(document.getElementById('coupon-edit-index').value, 10);
+    const code = document.getElementById('admin-coupon-code').value.trim().toUpperCase();
+    const type = document.getElementById('admin-coupon-type').value;
+    const value = parseFloat(document.getElementById('admin-coupon-value').value);
+
+    if (!code || isNaN(value) || value <= 0) return;
+
+    if (index === -1) {
+        // Add new coupon
+        if (availableCoupons.some(c => c.code === code)) {
+            showToast("A coupon with this code already exists.", "danger");
+            return;
+        }
+        availableCoupons.push({ code, type, value });
+        showToast(`Coupon ${code} created successfully!`, "success");
+    } else {
+        // Update coupon
+        availableCoupons[index] = { code, type, value };
+        showToast(`Coupon ${code} updated successfully!`, "success");
+    }
+
+    resetCouponForm();
+    renderAdminCouponsTable();
+    playBeep(880, 0.15, 0);
+}
+window.handleSaveCoupon = handleSaveCoupon;
