@@ -2586,9 +2586,10 @@ async function initAdminChart() {
                     grid: { color: 'rgba(255, 255, 255, 0.05)' },
                     ticks: { color: '#9ca3af', font: { size: 9 } }
                 }
-            }
         }
-    });
+    }
+});
+updateRevenueChartData();
 }
 
 function updateRevenueChartData() {
