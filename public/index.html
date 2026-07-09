@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Washing Basket|Dashboard</title>
+    <title>Washing Basket | Dashboard</title>
     <!-- Google Fonts: Outfit for headings, Inter for body -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -588,7 +588,6 @@
                                         class="w-full border-gray-200 focus:ring-primary rounded-lg py-2.5 px-4 font-body-md text-sm"
                                         required>
                                         <option value="cod" selected>Cash on Delivery (COD)</option>
-                                        <option value="card">Credit/Debit Card</option>
                                         <option value="upi">UPI / Net Banking</option>
                                     </select>
                                 </div>
@@ -1074,6 +1073,11 @@
                                 <p class="text-xs text-gray-500">Double click or trigger actions to update status rows.
                                 </p>
                             </div>
+                            <button onclick="seedSampleOrders()"
+                                class="px-4 py-2 bg-secondary text-white font-bold text-xs rounded-lg hover:bg-opacity-95 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-sm">database</span>
+                                Seed Mock Data
+                            </button>
                         </div>
 
                         <!-- Search and Filter Toolbar -->

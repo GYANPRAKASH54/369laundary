@@ -105,6 +105,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     // 5. Initialize Charts (Admin Pane)
     initAdminChart();
 
+    // Restore user session from localStorage if present
+    const storedUser = localStorage.getItem('washing_basket_user');
+    if (storedUser) {
+        try {
+            currentUser = JSON.parse(storedUser);
+            applyLoginState(currentUser);
+        } catch (e) {
+            console.error("Failed to restore session from localStorage:", e);
+        }
+    }
+
     // 6. Test connection to backend and load initial data
     await checkBackendConnection();
     await syncAppData();
@@ -593,6 +604,7 @@ async function handleAdminLoginSubmit(e) {
 
 function applyLoginState(user) {
     currentUser = user;
+    localStorage.setItem('washing_basket_user', JSON.stringify(user));
 
     // Header updates
     document.querySelector('.profile-name').innerText = user.name;
@@ -664,6 +676,7 @@ function handleLogout() {
     currentUser = null;
     activeOrder = null;
     currentBasket = [];
+    localStorage.removeItem('washing_basket_user');
     renderBasket();
 
     // Reset profile avatar
