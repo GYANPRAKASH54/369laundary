@@ -10,6 +10,8 @@ let activeAddressType = 'home';
 let chartInstance = null;
 let activeLogTab = 'wa';
 let activeCoupon = null;
+let currentWeighInOrder = null;
+let currentDeliveryOrder = null;
 let availableCoupons = JSON.parse(localStorage.getItem('available_coupons')) || [
     { code: 'WELCOME10', type: 'percent', value: 10 },
     { code: 'LAUNDRY20', type: 'percent', value: 20 },
@@ -2811,7 +2813,7 @@ async function handleQRScanResult(orderId) {
             await updateQROrderStatus(order.orderId, 'picked_up', `Order #${order.orderId} quantity verified. Status updated to Picked Up.`);
         }
     } else if (status === 'ready' || status === 'out_for_delivery') {
-        await updateQROrderStatus(order.orderId, 'delivered', `Order #${order.orderId} delivery verified. Status updated to Delivered.`);
+        openQRDeliveryModal(order);
     } else if (status === 'picked_up' || status === 'processing') {
         showToast(`Order #${order.orderId} has already been picked up (Current status: ${status.replace('_', ' ')}).`, "info");
     } else if (status === 'delivered') {
@@ -2908,6 +2910,78 @@ function closeQRWeighInModal() {
     }
     currentWeighInOrder = null;
 }
+
+function openQRDeliveryModal(order) {
+    currentDeliveryOrder = order;
+    
+    const modal = document.getElementById('admin-qr-delivery-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
+    
+    document.getElementById('qr-deliver-order-id').innerText = `#${order.orderId}`;
+    document.getElementById('qr-deliver-cust-name').innerText = order.customerName;
+    document.getElementById('qr-deliver-cust-phone').innerText = order.customerPhone;
+    document.getElementById('qr-deliver-address').innerText = order.address;
+    
+    const amount = order.amount || 0;
+    document.getElementById('qr-deliver-amount').innerText = `Amount: ₹${amount.toFixed(2)}`;
+    
+    const badge = document.getElementById('qr-deliver-payment-badge');
+    if (badge) {
+        badge.innerText = (order.payment || 'cash').toUpperCase();
+    }
+    
+    const cashContainer = document.getElementById('qr-deliver-cash-container');
+    const paidContainer = document.getElementById('qr-deliver-paid-container');
+    const cashCheckbox = document.getElementById('qr-deliver-cash-collected');
+    const cashLabel = document.getElementById('qr-deliver-cash-label');
+    
+    if (order.payment === 'cash') {
+        if (cashContainer) cashContainer.classList.remove('hidden');
+        if (paidContainer) paidContainer.classList.add('hidden');
+        if (cashCheckbox) cashCheckbox.checked = false;
+        if (cashLabel) cashLabel.innerText = `Cash collected of ₹${amount.toFixed(2)}`;
+    } else {
+        if (cashContainer) cashContainer.classList.add('hidden');
+        if (paidContainer) paidContainer.classList.remove('hidden');
+        const methodLabel = order.payment === 'wallet' ? 'Wallet Balance' : 'Online Payment';
+        document.getElementById('qr-deliver-paid-msg').innerHTML = `This order is pre-paid via <strong>${methodLabel}</strong>. No cash collection is necessary.`;
+    }
+}
+window.openQRDeliveryModal = openQRDeliveryModal;
+
+function closeQRDeliveryModal() {
+    const modal = document.getElementById('admin-qr-delivery-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+    currentDeliveryOrder = null;
+}
+window.closeQRDeliveryModal = closeQRDeliveryModal;
+
+async function submitQRDelivery(event) {
+    event.preventDefault();
+    if (!currentDeliveryOrder) return;
+    
+    const orderId = currentDeliveryOrder.orderId;
+    const paymentMethod = currentDeliveryOrder.payment;
+    
+    if (paymentMethod === 'cash') {
+        const cashCheckbox = document.getElementById('qr-deliver-cash-collected');
+        if (!cashCheckbox || !cashCheckbox.checked) {
+            alert("Please collect the cash payment and check the box to confirm delivery!");
+            return;
+        }
+    }
+    
+    closeQRDeliveryModal();
+    
+    await updateQROrderStatus(orderId, 'delivered', `Order #${orderId} delivery verified. Status updated to Delivered.`);
+}
+window.submitQRDelivery = submitQRDelivery;
 
 async function submitQRWeighIn(event) {
     event.preventDefault();
