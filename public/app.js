@@ -10,11 +10,14 @@ let activeAddressType = 'home';
 let chartInstance = null;
 let activeLogTab = 'wa';
 let activeCoupon = null;
-let availableCoupons = [
+let availableCoupons = JSON.parse(localStorage.getItem('available_coupons')) || [
     { code: 'WELCOME10', type: 'percent', value: 10 },
     { code: 'LAUNDRY20', type: 'percent', value: 20 },
     { code: 'FREESHIP', type: 'flat', value: 50 }
 ];
+function saveCouponsToStorage() {
+    localStorage.setItem('available_coupons', JSON.stringify(availableCoupons));
+}
 
 // Three.js washer instance
 let washer3D = null;
@@ -497,8 +500,10 @@ function showAuthMode(mode) {
 
 async function handleSignInSubmit(e) {
     e.preventDefault();
-    const phone = document.getElementById('signin-phone').value;
+    const rawPhone = document.getElementById('signin-phone').value.trim();
     const password = document.getElementById('signin-password').value;
+
+    const phone = normalizePhoneNumber(rawPhone);
 
     if (!useLocalFallback) {
         try {
@@ -538,12 +543,64 @@ async function handleSignInSubmit(e) {
     }
 }
 
+// Validation Helper Functions
+function isValidIndianPhoneNumber(phone) {
+    if (!phone) return false;
+    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) {
+        return /^[6-9]\d{9}$/.test(clean.substring(2));
+    }
+    if (clean.length === 10) {
+        return /^[6-9]\d{9}$/.test(clean);
+    }
+    return false;
+}
+
+function normalizePhoneNumber(phone) {
+    if (!phone) return '';
+    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) {
+        return '+91' + clean.substring(2);
+    }
+    if (clean.length === 10) {
+        return '+91' + clean;
+    }
+    return phone;
+}
+
+function isValidEmail(email) {
+    if (!email) return false;
+    const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return re.test(String(email).toLowerCase().trim());
+}
+
 async function handleSignUpSubmit(e) {
     e.preventDefault();
-    const name = document.getElementById('signup-name').value;
-    const phone = document.getElementById('signup-phone').value;
-    const email = document.getElementById('signup-email').value;
+    const name = document.getElementById('signup-name').value.trim();
+    const rawPhone = document.getElementById('signup-phone').value.trim();
+    const email = document.getElementById('signup-email').value.trim();
+    const phone = normalizePhoneNumber(rawPhone);
     const password = document.getElementById('signup-password').value;
+
+    if (!name) {
+        showToast("Full Name is required.", "danger");
+        return;
+    }
+
+    if (!isValidEmail(email)) {
+        showToast("Invalid email address format. Must be user@domain.com.", "danger");
+        return;
+    }
+
+    if (!isValidIndianPhoneNumber(phone)) {
+        showToast("Invalid Indian phone number. Please enter a valid 10-digit mobile number.", "danger");
+        return;
+    }
+
+    if (password.length < 6) {
+        showToast("Password must be at least 6 characters long for security.", "danger");
+        return;
+    }
 
     if (!useLocalFallback) {
         try {
@@ -572,8 +629,10 @@ async function handleSignUpSubmit(e) {
 
 async function handleAdminLoginSubmit(e) {
     e.preventDefault();
-    const phone = document.getElementById('admin-login-phone').value;
+    const rawPhone = document.getElementById('admin-login-phone').value.trim();
     const password = document.getElementById('admin-login-password').value;
+
+    const phone = normalizePhoneNumber(rawPhone);
 
     if (!useLocalFallback) {
         try {
@@ -947,17 +1006,29 @@ async function handleNewBooking(e) {
     let customerName, customerPhone, customerEmail;
     if (currentUser) {
         customerName = currentUser.name;
-        customerPhone = currentUser.phone;
+        customerPhone = normalizePhoneNumber(currentUser.phone);
         customerEmail = currentUser.email;
     } else {
         customerName = document.getElementById('booking-guest-name').value.trim();
-        customerPhone = document.getElementById('booking-guest-phone').value.trim();
+        const rawPhone = document.getElementById('booking-guest-phone').value.trim();
         customerEmail = document.getElementById('booking-guest-email').value.trim();
 
-        if (!customerName || !customerPhone || !customerEmail) {
+        if (!customerName || !rawPhone || !customerEmail) {
             showToast("Please enter your guest details: Name, Mobile, and Email!", "danger");
             return;
         }
+
+        if (!isValidEmail(customerEmail)) {
+            showToast("Invalid guest email address format. Must be user@domain.com.", "danger");
+            return;
+        }
+
+        if (!isValidIndianPhoneNumber(rawPhone)) {
+            showToast("Invalid guest phone number. Please enter a valid 10-digit Indian mobile number.", "danger");
+            return;
+        }
+
+        customerPhone = normalizePhoneNumber(rawPhone);
     }
 
     const address = `${apartment}, ${locality} (Landmark: ${landmark})`;
@@ -1070,6 +1141,14 @@ async function handleNewBooking(e) {
     }
 
     currentBasket = [];
+    if (activeCoupon) {
+        // Expire the coupon since it was used in placing this order
+        availableCoupons = availableCoupons.filter(c => c.code !== activeCoupon.code);
+        saveCouponsToStorage();
+        if (typeof renderAdminCouponsTable === 'function') {
+            renderAdminCouponsTable();
+        }
+    }
     activeCoupon = null;
     const coupInp = document.getElementById('coupon-code-input');
     if (coupInp) coupInp.value = '';
@@ -3119,11 +3198,26 @@ async function handleAddValetSubmit(e) {
     e.preventDefault();
     
     const name = document.getElementById('new-valet-name').value.trim();
-    const phone = document.getElementById('new-valet-phone').value.trim();
+    const rawPhone = document.getElementById('new-valet-phone').value.trim();
     const vehicle = document.getElementById('new-valet-vehicle').value.trim();
     const password = document.getElementById('new-valet-password').value;
 
-    if (!name || !phone || !password) return;
+    if (!name || !rawPhone || !password) {
+        showToast("Name, Mobile, and Login Password are required to create a valet.", "danger");
+        return;
+    }
+
+    if (!isValidIndianPhoneNumber(rawPhone)) {
+        showToast("Invalid valet phone number. Please enter a valid 10-digit Indian mobile number.", "danger");
+        return;
+    }
+
+    const phone = normalizePhoneNumber(rawPhone);
+
+    if (password.length < 6) {
+        showToast("Valet login password must be at least 6 characters long.", "danger");
+        return;
+    }
 
     if (!useLocalFallback) {
         try {
@@ -3238,6 +3332,7 @@ window.editCoupon = editCoupon;
 function deleteCoupon(index) {
     if (confirm(`Are you sure you want to delete coupon ${availableCoupons[index].code}?`)) {
         availableCoupons.splice(index, 1);
+        saveCouponsToStorage();
         renderAdminCouponsTable();
         showToast("Coupon deleted successfully.", "success");
     }
@@ -3268,10 +3363,12 @@ function handleSaveCoupon(e) {
             return;
         }
         availableCoupons.push({ code, type, value });
+        saveCouponsToStorage();
         showToast(`Coupon ${code} created successfully!`, "success");
     } else {
         // Update coupon
         availableCoupons[index] = { code, type, value };
+        saveCouponsToStorage();
         showToast(`Coupon ${code} updated successfully!`, "success");
     }
 

@@ -63,12 +63,53 @@ const servicePrices = {
     "only_iron": { name: "Only Iron", price: 10, unit: "pcs" }
 };
 
+// Validation Helper Functions
+function isValidIndianPhoneNumber(phone) {
+    if (!phone) return false;
+    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) {
+        return /^[6-9]\d{9}$/.test(clean.substring(2));
+    }
+    if (clean.length === 10) {
+        return /^[6-9]\d{9}$/.test(clean);
+    }
+    return false;
+}
+
+function normalizePhoneNumber(phone) {
+    if (!phone) return '';
+    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) {
+        return '+91' + clean.substring(2);
+    }
+    if (clean.length === 10) {
+        return '+91' + clean;
+    }
+    return phone;
+}
+
+function isValidEmail(email) {
+    if (!email) return false;
+    const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return re.test(String(email).toLowerCase().trim());
+}
+
 // 1. AUTHENTICATION: SIGN UP
 app.post('/api/auth/signup', async (req, res) => {
-    const { name, phone, email, password } = req.body;
-    if (!phone || !name || !email || !password) {
+    const { name, phone: rawPhone, email, password } = req.body;
+    if (!rawPhone || !name || !email || !password) {
         return res.status(400).json({ error: 'All fields (name, phone, email, password) are required.' });
     }
+
+    if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'Invalid email address format. Must be user@domain.com' });
+    }
+
+    if (!isValidIndianPhoneNumber(rawPhone)) {
+        return res.status(400).json({ error: 'Invalid Indian phone number. Please enter a valid 10-digit mobile number.' });
+    }
+
+    const phone = normalizePhoneNumber(rawPhone);
 
     try {
         const existing = await dbGet('SELECT * FROM users WHERE phone = ? OR email = ?', [phone, email]);
@@ -91,10 +132,12 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // 2. AUTHENTICATION: LOGIN
 app.post('/api/auth/login', async (req, res) => {
-    const { phone, password } = req.body;
-    if (!phone || !password) {
+    const { phone: rawPhone, password } = req.body;
+    if (!rawPhone || !password) {
         return res.status(400).json({ error: 'Phone number and password are required.' });
     }
+
+    const phone = normalizePhoneNumber(rawPhone);
 
     try {
         const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
@@ -114,10 +157,12 @@ app.post('/api/auth/login', async (req, res) => {
 
 // 3. ADDRESS BOOK: GET ADDRESSES
 app.get('/api/users/addresses', async (req, res) => {
-    const { phone } = req.query;
-    if (!phone) {
+    const { phone: rawPhone } = req.query;
+    if (!rawPhone) {
         return res.status(400).json({ error: 'User phone is required' });
     }
+
+    const phone = normalizePhoneNumber(rawPhone);
 
     try {
         const addresses = await dbAll('SELECT * FROM addresses WHERE user_phone = ?', [phone]);
@@ -130,10 +175,12 @@ app.get('/api/users/addresses', async (req, res) => {
 
 // 4. ADDRESS BOOK: ADD ADDRESS
 app.post('/api/users/addresses', async (req, res) => {
-    const { phone, type, address_line } = req.body;
-    if (!phone || !type || !address_line) {
+    const { phone: rawPhone, type, address_line } = req.body;
+    if (!rawPhone || !type || !address_line) {
         return res.status(400).json({ error: 'Phone, type, and address_line are required' });
     }
+
+    const phone = normalizePhoneNumber(rawPhone);
 
     try {
         const existing = await dbGet(
@@ -229,10 +276,14 @@ app.get('/api/admin/valets', async (req, res) => {
 
 // 5.8 ADMIN: CREATE NEW STAFF VALET
 app.post('/api/admin/valets', async (req, res) => {
-    const { name, phone, vehicle_num, password } = req.body;
-    if (!name || !phone || !password) {
+    const { name, phone: rawPhone, vehicle_num, password } = req.body;
+    if (!name || !rawPhone || !password) {
         return res.status(400).json({ error: 'Name, Phone, and Password are required' });
     }
+    if (!isValidIndianPhoneNumber(rawPhone)) {
+        return res.status(400).json({ error: 'Invalid Indian phone number for valet. Please enter a valid 10-digit mobile number.' });
+    }
+    const phone = normalizePhoneNumber(rawPhone);
     try {
         await dbRun(
             'INSERT INTO valets (name, phone, vehicle_num, status) VALUES (?, ?, ?, ?)',
@@ -323,12 +374,22 @@ app.get('/api/orders/next-id', async (req, res) => {
 // 6. ORDERS: PLACE ORDER
 app.post('/api/orders', async (req, res) => {
     const {
-        orderId, customerName, customerPhone, customerEmail, date, slot, address, addressType, payment, weight, itemsCount, amount, status, timestamp, items, latitude, longitude
+        orderId, customerName, customerPhone: rawPhone, customerEmail, date, slot, address, addressType, payment, weight, itemsCount, amount, status, timestamp, items, latitude, longitude
     } = req.body;
 
-    if (!orderId || !customerPhone || !items || items.length === 0) {
+    if (!orderId || !rawPhone || !items || items.length === 0) {
         return res.status(400).json({ error: 'Incomplete order details or empty basket' });
     }
+
+    if (customerEmail && !isValidEmail(customerEmail)) {
+        return res.status(400).json({ error: 'Invalid customer email address.' });
+    }
+
+    if (!isValidIndianPhoneNumber(rawPhone)) {
+        return res.status(400).json({ error: 'Invalid customer phone number. Must be a valid 10-digit Indian mobile.' });
+    }
+
+    const customerPhone = normalizePhoneNumber(rawPhone);
 
     try {
         await dbRun(`
