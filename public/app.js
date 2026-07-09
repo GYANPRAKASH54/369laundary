@@ -260,7 +260,11 @@ async function checkBackendConnection() {
     } catch (e) {
         console.warn("Backend server offline. Running in Local Memory Fallback Mode.");
         useLocalFallback = true;
-        showToast("Backend Server Offline. Running in simulated offline mode.", "warning");
+        if (window.location.hostname.includes("vercel.app")) {
+            showToast("Supabase Database not connected. Set DATABASE_URL in Vercel settings.", "warning");
+        } else {
+            showToast("Backend Server Offline. Running in simulated offline mode.", "warning");
+        }
     }
 }
 
@@ -564,21 +568,24 @@ async function handleSignInSubmit(e) {
 // Validation Helper Functions
 function isValidIndianPhoneNumber(phone) {
     if (!phone) return false;
-    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    let clean = phone.replace(/\D/g, '');
+    if (clean.startsWith('0')) {
+        clean = clean.substring(1);
+    }
     if (clean.length === 12 && clean.startsWith('91')) {
-        return /^[6-9]\d{9}$/.test(clean.substring(2));
+        clean = clean.substring(2);
     }
-    if (clean.length === 10) {
-        return /^[6-9]\d{9}$/.test(clean);
-    }
-    return false;
+    return clean.length === 10 && /^[6-9]\d{9}$/.test(clean);
 }
 
 function normalizePhoneNumber(phone) {
     if (!phone) return '';
-    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    let clean = phone.replace(/\D/g, '');
+    if (clean.startsWith('0')) {
+        clean = clean.substring(1);
+    }
     if (clean.length === 12 && clean.startsWith('91')) {
-        return '+91' + clean.substring(2);
+        clean = clean.substring(2);
     }
     if (clean.length === 10) {
         return '+91' + clean;
@@ -675,7 +682,7 @@ async function handleAdminLoginSubmit(e) {
             alert("Server error connecting to database.");
         }
     } else {
-        if ((phone === 'admin' || phone === '8699013959' || phone === '+918699013959') && password === 'ADMIN123') {
+        if ((phone === 'admin' || phone === '8699013959' || phone === '+918699013959') && password.trim().toUpperCase() === 'ADMIN123') {
             applyLoginState({ name: "Admin Manager", phone: phone, email: "admin@369laundry.com", role: "admin" });
             showToast("Admin authenticated successfully (Simulated memory mode)", "success");
             switchTab('admin');

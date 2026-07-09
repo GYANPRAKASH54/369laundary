@@ -66,21 +66,24 @@ const servicePrices = {
 // Validation Helper Functions
 function isValidIndianPhoneNumber(phone) {
     if (!phone) return false;
-    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    let clean = phone.replace(/\D/g, '');
+    if (clean.startsWith('0')) {
+        clean = clean.substring(1);
+    }
     if (clean.length === 12 && clean.startsWith('91')) {
-        return /^[6-9]\d{9}$/.test(clean.substring(2));
+        clean = clean.substring(2);
     }
-    if (clean.length === 10) {
-        return /^[6-9]\d{9}$/.test(clean);
-    }
-    return false;
+    return clean.length === 10 && /^[6-9]\d{9}$/.test(clean);
 }
 
 function normalizePhoneNumber(phone) {
     if (!phone) return '';
-    const clean = phone.replace(/[\s\-\(\)\+]/g, '');
+    let clean = phone.replace(/\D/g, '');
+    if (clean.startsWith('0')) {
+        clean = clean.substring(1);
+    }
     if (clean.length === 12 && clean.startsWith('91')) {
-        return '+91' + clean.substring(2);
+        clean = clean.substring(2);
     }
     if (clean.length === 10) {
         return '+91' + clean;
