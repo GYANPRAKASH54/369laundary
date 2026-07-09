@@ -132,13 +132,11 @@ INSERT INTO users (name, phone, email, password, role) VALUES
 ('Admin Manager Partner', '+918699013959', 'admin@369laundry.com', 'ADMIN123', 'admin')
 ON CONFLICT (phone) DO UPDATE SET role = 'admin', password = 'ADMIN123';
 
--- Seed default Customer accounts
-INSERT INTO users (name, phone, email, password, role) VALUES 
-('Priya Nair', '+91 88390 12345', 'priya@email.com', 'password', 'customer'),
-('Amit Patel', '+91 98230 45678', 'amit@email.com', 'password', 'customer'),
-('Vikram Singh', '+91 77382 99221', 'vikram@email.com', 'password', 'customer'),
-('Rahul Sharma', '+91 99999 88888', 'rahul@email.com', 'password', 'customer')
-ON CONFLICT (phone) DO NOTHING;
+-- Clean up historical default mock customer accounts if they exist
+DELETE FROM users WHERE phone IN (
+    '+91 88390 12345', '+91 98230 45678', '+91 77382 99221', '+91 99999 88888',
+    '+918839012345', '+919823045678', '+917738299221', '+919999988888'
+);
 
 -- Seed default Settings
 INSERT INTO admin_settings (key, value, description) VALUES

@@ -438,26 +438,13 @@ const seedMockData = async () => {
             console.log(`Promoted existing user ${partnerAdminPhone} to Administrator.`);
         }
 
-        if (orderCount.count === 0) {
-            console.log("No orders found. Seeding historical metrics with new services...");
-            
-            // Seed Customer Users
-            const seedCustomers = [
-                { name: "Priya Nair", phone: "+91 88390 12345", email: "priya@email.com", password: "password", role: "customer" },
-                { name: "Amit Patel", phone: "+91 98230 45678", email: "amit@email.com", password: "password", role: "customer" },
-                { name: "Vikram Singh", phone: "+91 77382 99221", email: "vikram@email.com", password: "password", role: "customer" },
-                { name: "Rahul Sharma", phone: "+91 99999 88888", email: "rahul@email.com", password: "password", role: "customer" }
-            ];
-
-            for (const cust of seedCustomers) {
-                await dbRun(
-                    'INSERT OR IGNORE INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-                    [cust.name, cust.phone, cust.email, cust.password, cust.role]
-                );
-            }
-
-            console.log("Database initialized with default customer accounts (no mock orders).");
-        }
+        // Clean up historical default mock customer accounts if they exist
+        await dbRun(`
+            DELETE FROM users WHERE phone IN (
+                '+91 88390 12345', '+91 98230 45678', '+91 77382 99221', '+91 99999 88888',
+                '+918839012345', '+919823045678', '+917738299221', '+919999988888'
+            )
+        `);
     } catch (e) {
         console.error("Error seeding mock data:", e.message);
     }
