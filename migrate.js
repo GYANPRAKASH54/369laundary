@@ -118,10 +118,11 @@ CREATE TABLE IF NOT EXISTS admin_settings (
 `;
 
 const seedSql = `
--- Seed default Admin account if it doesn't exist
-INSERT INTO users (name, phone, email, password, role) 
-VALUES ('Admin Manager', 'admin', 'admin@369laundry.com', 'ADMIN123', 'admin')
-ON CONFLICT (phone) DO NOTHING;
+-- Seed default Admin accounts if they don't exist
+INSERT INTO users (name, phone, email, password, role) VALUES 
+('Admin Manager', 'admin', 'admin@369laundry.com', 'ADMIN123', 'admin'),
+('Admin Manager Partner', '+918699013959', 'admin@369laundry.com', 'ADMIN123', 'admin')
+ON CONFLICT (phone) DO UPDATE SET role = 'admin', password = 'ADMIN123';
 
 -- Seed default Customer accounts
 INSERT INTO users (name, phone, email, password, role) VALUES 

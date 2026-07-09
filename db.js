@@ -159,8 +159,8 @@ const dbGet = (sql, params = []) => {
         }
 
         if (!db) {
-            if (sql.includes("FROM users WHERE phone = ?") && params[0] === 'admin') {
-                resolve({ name: 'Admin Manager', phone: 'admin', email: 'admin@369laundry.com', password: 'ADMIN123', role: 'admin' });
+            if (sql.includes("FROM users WHERE phone = ?") && (params[0] === 'admin' || params[0] === '8699013959' || params[0] === '+918699013959')) {
+                resolve({ name: 'Admin Manager Partner', phone: '+918699013959', email: 'admin@369laundry.com', password: 'ADMIN123', role: 'admin' });
             } else {
                 resolve(null);
             }
@@ -403,6 +403,19 @@ const seedMockData = async () => {
                 [adminName, adminPhone, adminEmail, adminPassword, 'admin']
             );
             console.log(`Seeded default Administrator account (${adminPhone}/${adminPassword})`);
+        }
+
+        const partnerAdminPhone = '+918699013959';
+        const partnerAdmin = await dbGet("SELECT * FROM users WHERE phone = ?", [partnerAdminPhone]);
+        if (!partnerAdmin) {
+            await dbRun(
+                'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
+                ['Admin Manager Partner', partnerAdminPhone, 'admin@369laundry.com', adminPassword, 'admin']
+            );
+            console.log(`Seeded partner Administrator account (${partnerAdminPhone}/${adminPassword})`);
+        } else if (partnerAdmin.role !== 'admin') {
+            await dbRun("UPDATE users SET role = 'admin' WHERE phone = ?", [partnerAdminPhone]);
+            console.log(`Promoted existing user ${partnerAdminPhone} to Administrator.`);
         }
 
         if (orderCount.count === 0) {

@@ -657,12 +657,12 @@ async function handleAdminLoginSubmit(e) {
             alert("Server error connecting to database.");
         }
     } else {
-        if ((phone === 'admin' || phone === '8210895737' || phone === '+918210895737') && password === 'ADMIN123') {
+        if ((phone === 'admin' || phone === '8699013959' || phone === '+918699013959') && password === 'ADMIN123') {
             applyLoginState({ name: "Admin Manager", phone: phone, email: "admin@369laundry.com", role: "admin" });
             showToast("Admin authenticated successfully (Simulated memory mode)", "success");
             switchTab('admin');
         } else {
-            alert("Incorrect admin credentials in simulated mode. Use phone: admin or 8210895737 and password: ADMIN123.");
+            alert("Incorrect admin credentials in simulated mode. Use phone: admin or 8699013959 and password: ADMIN123.");
         }
     }
 }
