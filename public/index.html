@@ -95,7 +95,7 @@
     </style>
 </head>
 
-<body class="bg-background font-sans text-primary min-h-screen flex flex-col">
+<body class="bg-background font-sans text-primary min-h-screen flex flex-col pb-20 md:pb-0">
 
     <!-- Global TopNavBar Header -->
     <header class="w-full top-0 sticky z-50 bg-white shadow-sm border-b border-gray-100">
@@ -1397,6 +1397,30 @@
             </form>
         </div>
     </div>
+
+    <!-- Mobile Bottom Navigation Bar (Visible only on small screens) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/60 z-50 px-4 py-2.5 shadow-lg flex justify-around items-center">
+        <!-- Home / Overview -->
+        <button onclick="switchTab('landing')" class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-secondary focus:outline-none transition-colors">
+            <span class="material-symbols-outlined text-[22px]">home</span>
+            <span class="text-[9px] font-bold uppercase tracking-wider">Overview</span>
+        </button>
+        <!-- Book Valet -->
+        <button onclick="switchTab('customer-book')" class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-secondary focus:outline-none transition-colors">
+            <span class="material-symbols-outlined text-[22px]">calendar_month</span>
+            <span class="text-[9px] font-bold uppercase tracking-wider">Book</span>
+        </button>
+        <!-- Dashboard (Hidden for guests, visible if logged in) -->
+        <button id="mobile-nav-dashboard" onclick="routeToDashboard()" class="flex-col items-center gap-0.5 text-gray-500 hover:text-secondary focus:outline-none transition-colors" style="display: none;">
+            <span class="material-symbols-outlined text-[22px]">dashboard</span>
+            <span id="mobile-nav-dashboard-text" class="text-[9px] font-bold uppercase tracking-wider">Dashboard</span>
+        </button>
+        <!-- Auth action (Login/Logout) -->
+        <button id="mobile-nav-auth" onclick="toggleMobileAuth()" class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-secondary focus:outline-none transition-colors">
+            <span id="mobile-nav-auth-icon" class="material-symbols-outlined text-[22px]">login</span>
+            <span id="mobile-nav-auth-text" class="text-[9px] font-bold uppercase tracking-wider">Login</span>
+        </button>
+    </nav>
 
     <!-- Script integrations -->
     <script src="app.js"></script>

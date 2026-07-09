@@ -606,6 +606,19 @@ function applyLoginState(user) {
     currentUser = user;
     localStorage.setItem('washing_basket_user', JSON.stringify(user));
 
+    // Update mobile bottom navigation bar dynamically
+    const mobDash = document.getElementById('mobile-nav-dashboard');
+    const mobDashText = document.getElementById('mobile-nav-dashboard-text');
+    const mobAuthIcon = document.getElementById('mobile-nav-auth-icon');
+    const mobAuthText = document.getElementById('mobile-nav-auth-text');
+
+    if (mobDash) mobDash.style.display = 'flex';
+    if (mobDashText) {
+        mobDashText.innerText = (user.role === 'admin' || user.role === 'valet') ? 'Control' : 'Dashboard';
+    }
+    if (mobAuthIcon) mobAuthIcon.innerText = 'logout';
+    if (mobAuthText) mobAuthText.innerText = 'Logout';
+
     // Header updates
     document.querySelector('.profile-name').innerText = user.name;
     document.querySelector('.profile-role').innerText = user.role.toUpperCase();
@@ -678,6 +691,15 @@ function handleLogout() {
     currentBasket = [];
     localStorage.removeItem('washing_basket_user');
     renderBasket();
+
+    // Reset mobile navigation bar to guest states
+    const mobDash = document.getElementById('mobile-nav-dashboard');
+    const mobAuthIcon = document.getElementById('mobile-nav-auth-icon');
+    const mobAuthText = document.getElementById('mobile-nav-auth-text');
+
+    if (mobDash) mobDash.style.display = 'none';
+    if (mobAuthIcon) mobAuthIcon.innerText = 'login';
+    if (mobAuthText) mobAuthText.innerText = 'Login';
 
     // Reset profile avatar
     document.querySelector('.profile-name').innerText = "Guest Mode";
@@ -3059,3 +3081,23 @@ async function handleAddValetSubmit(e) {
     playBeep(880, 0.15, 0);
 }
 window.handleAddValetSubmit = handleAddValetSubmit;
+
+function routeToDashboard() {
+    if (currentUser) {
+        if (currentUser.role === 'admin' || currentUser.role === 'valet') {
+            switchTab('admin');
+        } else {
+            switchTab('customer');
+        }
+    }
+}
+window.routeToDashboard = routeToDashboard;
+
+function toggleMobileAuth() {
+    if (currentUser) {
+        handleLogout();
+    } else {
+        showAuthMode('signin');
+    }
+}
+window.toggleMobileAuth = toggleMobileAuth;
