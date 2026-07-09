@@ -10,8 +10,6 @@ let activeAddressType = 'home';
 let chartInstance = null;
 let activeLogTab = 'wa';
 let activeCoupon = null;
-let currentWeighInOrder = null;
-let currentDeliveryOrder = null;
 let availableCoupons = JSON.parse(localStorage.getItem('available_coupons')) || [
     { code: 'WELCOME10', type: 'percent', value: 10 },
     { code: 'LAUNDRY20', type: 'percent', value: 20 },
@@ -2695,6 +2693,7 @@ window.handleAdminFilterChange = handleAdminFilterChange;
 // QR Code Scanning and Status updates workflow
 let html5QrScanner = null;
 let currentWeighInOrder = null;
+let currentDeliveryOrder = null;
 
 function openQRScannerModal() {
     const modal = document.getElementById('admin-qr-scanner-modal');
