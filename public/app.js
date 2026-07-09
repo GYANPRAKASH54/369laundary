@@ -1063,15 +1063,21 @@ function updateCustomerActiveBadge() {
 function renderActiveOrderTracking() {
     const noOrderCard = document.getElementById('no-active-order');
     const trackCard = document.getElementById('active-order-tracking');
+    const activeOrdersBadge = document.getElementById('customer-active-orders-badge');
 
     if (!activeOrder || activeOrder.status === 'delivered' || activeOrder.status === 'cancelled') {
         if (noOrderCard) noOrderCard.style.display = 'block';
         if (trackCard) trackCard.style.display = 'none';
+        if (activeOrdersBadge) activeOrdersBadge.style.display = 'none';
         return;
     }
 
     if (noOrderCard) noOrderCard.style.display = 'none';
     if (trackCard) trackCard.style.display = 'block';
+    if (activeOrdersBadge) {
+        activeOrdersBadge.style.display = 'inline-block';
+        activeOrdersBadge.innerText = '1 in Progress';
+    }
 
     const isWeight = activeOrder.items.some(i => i.serviceCode.includes('wash_fold') || i.serviceCode.includes('wash_iron'));
     const isPendingWeigh = isWeight && activeOrder.weight === 0;
