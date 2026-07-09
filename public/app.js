@@ -531,10 +531,10 @@ async function handleSignInSubmit(e) {
             alert("To log in as administrator, please use the STAFF login tab.");
         } else {
             const seedCusts = {
-                "+91 98230 45678": "Amit Patel",
-                "+91 88390 12345": "Priya Nair",
-                "+91 77382 99221": "Vikram Singh",
-                "+91 99999 88888": "Rahul Sharma"
+                "+919823045678": "Amit Patel",
+                "+918839012345": "Priya Nair",
+                "+917738299221": "Vikram Singh",
+                "+919999988888": "Rahul Sharma"
             };
             const custName = seedCusts[phone] || "Offline Customer";
             applyLoginState({ name: custName, phone, email: "offline@369laundry.com", role: "customer" });
@@ -657,7 +657,7 @@ async function handleAdminLoginSubmit(e) {
             alert("Server error connecting to database.");
         }
     } else {
-        if ((phone === 'admin' || phone === '8210895737') && password === 'ADMIN123') {
+        if ((phone === 'admin' || phone === '8210895737' || phone === '+918210895737') && password === 'ADMIN123') {
             applyLoginState({ name: "Admin Manager", phone: phone, email: "admin@369laundry.com", role: "admin" });
             showToast("Admin authenticated successfully (Simulated memory mode)", "success");
             switchTab('admin');
