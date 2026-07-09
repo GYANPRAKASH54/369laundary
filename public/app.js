@@ -687,7 +687,7 @@ async function handleAdminLoginSubmit(e) {
             showToast("Admin authenticated successfully (Simulated memory mode)", "success");
             switchTab('admin');
         } else {
-            alert("Incorrect admin credentials in simulated mode. Use phone: admin or 8699013959 and password: ADMIN123.");
+            alert("Incorrect admin credentials in simulated mode.");
         }
     }
 }
