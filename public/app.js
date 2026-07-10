@@ -172,6 +172,13 @@ window.addEventListener('DOMContentLoaded', async () => {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    // 6.2 Check for tab parameter in URL
+    const tabParam = urlParams.get('tab');
+    if (tabParam) {
+        switchTab(tabParam);
+    }
+
+
     // 7. Start polling sync if connected
     setInterval(async () => {
         if (!useLocalFallback) {
