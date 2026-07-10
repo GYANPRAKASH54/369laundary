@@ -246,7 +246,8 @@ const initDb = async () => {
                     latitude REAL DEFAULT 0.0,
                     longitude REAL DEFAULT 0.0,
                     valet_id INTEGER REFERENCES valets(id) ON DELETE SET NULL,
-                    is_express BOOLEAN DEFAULT FALSE
+                    is_express BOOLEAN DEFAULT FALSE,
+                    payment_status VARCHAR(50) DEFAULT 'pending'
                 )
             `);
 
@@ -254,6 +255,12 @@ const initDb = async () => {
                 await dbRun("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_express BOOLEAN DEFAULT FALSE");
             } catch(e) {
                 console.warn("is_express column check failed:", e.message);
+            }
+
+            try {
+                await dbRun("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'pending'");
+            } catch(e) {
+                console.warn("payment_status column check failed:", e.message);
             }
 
             await dbRun(`
@@ -361,7 +368,8 @@ const initDb = async () => {
                 status TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 latitude REAL DEFAULT 0.0,
-                longitude REAL DEFAULT 0.0
+                longitude REAL DEFAULT 0.0,
+                payment_status TEXT DEFAULT 'pending'
             )
         `);
 
@@ -374,6 +382,9 @@ const initDb = async () => {
         } catch(e) {}
         try {
             await dbRun("ALTER TABLE orders ADD COLUMN is_express INTEGER DEFAULT 0");
+        } catch(e) {}
+        try {
+            await dbRun("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'pending'");
         } catch(e) {}
 
         // 4. Order Items Table

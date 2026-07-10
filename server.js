@@ -326,7 +326,8 @@ app.get('/api/orders', async (req, res) => {
             timestamp: order.timestamp,
             latitude: order.latitude || 0,
             longitude: order.longitude || 0,
-            isExpress: order.is_express === 1 || order.is_express === true || order.is_express === 'true' || order.is_express === '1'
+            isExpress: order.is_express === 1 || order.is_express === true || order.is_express === 'true' || order.is_express === '1',
+            paymentStatus: order.payment_status || 'pending'
         }));
 
         for (let order of mappedOrders) {
@@ -485,7 +486,8 @@ app.get('/api/orders/:orderId', async (req, res) => {
             timestamp: order.timestamp,
             latitude: order.latitude || 0,
             longitude: order.longitude || 0,
-            isExpress: order.is_express === 1 || order.is_express === true || order.is_express === 'true' || order.is_express === '1'
+            isExpress: order.is_express === 1 || order.is_express === true || order.is_express === 'true' || order.is_express === '1',
+            paymentStatus: order.payment_status || 'pending'
         };
 
         const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
@@ -719,6 +721,31 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
     }
 });
 
+// 9.5 ORDERS: UPDATE PAYMENT STATUS
+app.put('/api/orders/:orderId/payment-status', async (req, res) => {
+    const { orderId } = req.params;
+    const { paymentStatus } = req.body;
+
+    if (!paymentStatus || !['pending', 'paid'].includes(paymentStatus)) {
+        return res.status(400).json({ error: 'Valid paymentStatus (pending, paid) is required.' });
+    }
+
+    try {
+        const order = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        await dbRun('UPDATE orders SET payment_status = ? WHERE order_id = ?', [paymentStatus, orderId]);
+        console.log(`Updated payment status of order ${orderId} to ${paymentStatus}`);
+
+        res.json({ success: true, orderId, paymentStatus });
+    } catch (err) {
+        console.error('Update payment status error:', err.message);
+        res.status(500).json({ error: 'Database error updating payment status' });
+    }
+});
+
 // 10. GET EMAIL LOGS (Admin view)
 app.get('/api/email/logs', async (req, res) => {
     try {
@@ -771,16 +798,17 @@ async function sendMockEmail(order, type) {
     const billString = orderAmount > 0 ? `₹${orderAmount.toFixed(2)}` : 'Awaiting weight measurement at facility';
     const weightString = orderWeight > 0 ? `${orderWeight} kg` : 'Awaiting weigh-in';
 
-    // Generate dynamic UPI Scan-to-Pay QR code block if billing is active and payment is UPI
+    // Generate dynamic UPI Scan-to-Pay QR code block if billing is active (regardless of selected payment option)
     let qrSectionHtml = '';
-    if (orderPayment === 'upi' && orderAmount > 0) {
+    const orderPaymentStatus = order.payment_status || order.paymentStatus || 'pending';
+    if (orderAmount > 0 && orderPaymentStatus === 'pending') {
         const upiUrl = `upi://pay?pa=bharatpe09917234203@yesbankltd&pn=369%20Laundry&am=${orderAmount.toFixed(2)}&cu=INR&tn=Order-${orderId}`;
         const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUrl)}`;
 
         qrSectionHtml = `
             <div style="margin: 25px 0; padding: 20px; border: 2px dashed #7b5800; border-radius: 12px; background-color: #faf9f6; text-align: center; font-family: sans-serif;">
-                <h4 style="margin: 0 0 8px 0; color: #001726; font-size: 15px; font-weight: bold;">Scan to Pay with UPI</h4>
-                <p style="margin: 0 0 15px 0; font-size: 11px; color: #72787e;">Scan this code using BHIM, Google Pay, PhonePe, Paytm, or any banking app.</p>
+                <h4 style="margin: 0 0 8px 0; color: #001726; font-size: 15px; font-weight: bold;">Scan to Pay with UPI (Hassle-Free Online Payment)</h4>
+                <p style="margin: 0 0 15px 0; font-size: 11px; color: #72787e;">Scan this code using BHIM, Google Pay, PhonePe, Paytm, or any banking app to pay online instantly.</p>
                 <div style="display: inline-block; padding: 10px; background-color: #ffffff; border: 1px solid #c2c7cd; border-radius: 8px;">
                     <img src="${qrApiUrl}" alt="UPI Payment QR" style="display: block; width: 160px; height: 160px;" />
                 </div>

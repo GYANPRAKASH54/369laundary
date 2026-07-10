@@ -1495,6 +1495,32 @@ async function trackLandingOrder(optOrder) {
         `;
     });
 
+    // Generate UPI Scan-to-Pay QR code block
+    let upiPaymentHtml = '';
+    const paymentStatus = order.paymentStatus || order.payment_status || 'pending';
+    if (order.amount > 0 && paymentStatus !== 'paid') {
+        const upiUrl = `upi://pay?pa=bharatpe09917234203@yesbankltd&pn=369%20Laundry&am=${order.amount.toFixed(2)}&cu=INR&tn=Order-${order.orderId}`;
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(upiUrl)}`;
+
+        upiPaymentHtml = `
+            <div style="background: #fff; padding: 20px; border-radius: var(--radius-cards); border: 1.5px dashed var(--color-ink-black); display: flex; flex-direction: column; md:flex-row; justify-content: space-between; align-items: center; gap: 20px; margin-top: 15px;">
+                <div style="flex: 1;">
+                    <h5 style="margin: 0 0 4px 0; font-family: var(--font-supreme-ll-tt); font-size: 16px; font-weight: 800; color: var(--color-ink-black);">Pay Online (UPI)</h5>
+                    <p style="margin: 0 0 12px 0; font-size: 12px; color: #52585f; line-height: 1.4;">
+                        Opt for hassle-free online payment. Scan the QR code using any banking or UPI app (PhonePe, Google Pay, Paytm, etc.). Once done, click the button below to instantly verify and let the delivery valet know.
+                    </p>
+                    <button class="action-btn-primary" style="padding: 10px 20px; font-size: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px;" onclick="confirmUserUPIPayment('${order.orderId}')">
+                        <i class="fa-solid fa-circle-check"></i> I Have Paid Online via UPI
+                    </button>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--color-warm-canvas); padding: 12px; border-radius: var(--radius-cards); border: 1px solid var(--color-ink-black); width: fit-content; flex-shrink: 0;">
+                    <img src="${qrApiUrl}" alt="UPI Payment QR" style="width: 110px; height: 110px; display: block;" />
+                    <span style="font-size: 10px; font-weight: bold; color: var(--color-ink-black);">Amount: ₹${order.amount.toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+    }
+
     // Render tracking info layout
     resultDiv.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 20px;">
@@ -1525,7 +1551,9 @@ async function trackLandingOrder(optOrder) {
                 </div>
                 <div style="background: var(--color-pristine-surface); border: 1px solid var(--color-ink-black); padding: 15px; border-radius: var(--radius-cards);">
                     <span style="font-size: 10px; opacity: 0.6; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 2px;">Payment Status</span>
-                    <p style="margin: 0; font-size: 14px; font-weight: bold; color: var(--color-ink-black);">${order.payment.toUpperCase()}</p>
+                    <p style="margin: 0; font-size: 14px; font-weight: bold; color: ${paymentStatus === 'paid' ? '#10b981' : 'var(--color-ink-black)'};">
+                        ${order.payment.toUpperCase()} (${paymentStatus.toUpperCase()})
+                    </p>
                 </div>
                 <div style="background: var(--color-pristine-surface); border: 1px solid var(--color-ink-black); padding: 15px; border-radius: var(--radius-cards);">
                     <span style="font-size: 10px; opacity: 0.6; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 2px;">Total Weight</span>
@@ -1536,6 +1564,9 @@ async function trackLandingOrder(optOrder) {
                     <p style="margin: 0; font-size: 16px; font-weight: 800; color: var(--color-coral-pulse);">${amountText}</p>
                 </div>
             </div>
+
+            <!-- UPI Payment block -->
+            ${upiPaymentHtml}
 
             <!-- Full Width Timeline Stepper -->
             <div style="background: #fff; padding: 20px; border-radius: var(--radius-cards); border: 1px solid var(--color-ink-black);">
@@ -1831,6 +1862,9 @@ function renderAdminOrdersTable() {
                 </div>
                 <div class="text-sm font-bold text-secondary mt-1">
                     ${order.amount > 0 ? `₹${order.amount.toFixed(2)}` : '<span class="text-gray-400 italic font-normal font-bold">Weigh Pending</span>'}
+                </div>
+                <div class="mt-1">
+                    ${order.amount > 0 ? ((order.paymentStatus || order.payment_status) === 'paid' ? '<span class="px-1.5 py-0.5 rounded bg-green-50 border border-green-200 text-green-700 text-[10px] font-extrabold uppercase">Paid</span>' : '<span class="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-extrabold uppercase">Unpaid</span>') : ''}
                 </div>
                 <div class="text-[11px] text-gray-400 mt-1">(${order.itemsCount} items)</div>
             </td>
@@ -3053,7 +3087,13 @@ function openQRDeliveryModal(order) {
     const cashCheckbox = document.getElementById('qr-deliver-cash-collected');
     const cashLabel = document.getElementById('qr-deliver-cash-label');
     
-    if (order.payment === 'cash') {
+    const paymentStatus = order.paymentStatus || order.payment_status || 'pending';
+    if (paymentStatus === 'paid') {
+        if (cashContainer) cashContainer.classList.add('hidden');
+        if (paidContainer) paidContainer.classList.remove('hidden');
+        const methodLabel = order.payment === 'cash' ? 'UPI QR (Online)' : (order.payment === 'wallet' ? 'Wallet Balance' : 'Online Payment');
+        document.getElementById('qr-deliver-paid-msg').innerHTML = `<span style="color: #10b981; font-weight: bold; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-circle-check"></i> PRE-PAID ONLINE (${methodLabel})</span><br>The customer has already completed payment. <strong>DO NOT COLLECT ANY CASH.</strong>`;
+    } else if (order.payment === 'cash') {
         if (cashContainer) cashContainer.classList.remove('hidden');
         if (paidContainer) paidContainer.classList.add('hidden');
         if (cashCheckbox) cashCheckbox.checked = false;
@@ -3083,8 +3123,9 @@ async function submitQRDelivery(event) {
     
     const orderId = currentDeliveryOrder.orderId;
     const paymentMethod = currentDeliveryOrder.payment;
+    const paymentStatus = currentDeliveryOrder.paymentStatus || currentDeliveryOrder.payment_status || 'pending';
     
-    if (paymentMethod === 'cash') {
+    if (paymentMethod === 'cash' && paymentStatus !== 'paid') {
         const cashCheckbox = document.getElementById('qr-deliver-cash-collected');
         if (!cashCheckbox || !cashCheckbox.checked) {
             alert("Please collect the cash payment and check the box to confirm delivery!");
@@ -3895,3 +3936,55 @@ function handleContactSubmit(e) {
     e.target.reset();
 }
 window.handleContactSubmit = handleContactSubmit;
+
+async function confirmUserUPIPayment(orderId) {
+    if (!confirm("Are you sure you have completed the online payment via UPI? Our system will log this confirmation.")) {
+        return;
+    }
+
+    try {
+        if (!useLocalFallback) {
+            const res = await fetch(`${API_BASE}/orders/${orderId}/payment-status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentStatus: 'paid' })
+            });
+
+            if (res.ok) {
+                showToast("Payment confirmation recorded successfully! Thank you.", "success");
+                // Update local memory
+                const ord = orders.find(o => o.orderId === orderId);
+                if (ord) {
+                    ord.paymentStatus = 'paid';
+                    ord.payment_status = 'paid';
+                }
+                // Refresh tracking view
+                let updatedOrder = null;
+                try {
+                    const resOrder = await fetch(`${API_BASE}/orders/${orderId}`);
+                    if (resOrder.ok) {
+                        updatedOrder = await resOrder.json();
+                    }
+                } catch(e) {}
+                showOrderTrackerInfo(updatedOrder || ord);
+            } else {
+                const data = await res.json();
+                showToast(data.error || "Failed to update payment status.", "danger");
+            }
+        } else {
+            // Local fallback simulation
+            const ord = orders.find(o => o.orderId === orderId);
+            if (ord) {
+                ord.paymentStatus = 'paid';
+                ord.payment_status = 'paid';
+                showToast("Payment confirmation recorded (Simulated offline memory)!", "success");
+                showOrderTrackerInfo(ord);
+            }
+        }
+    } catch (err) {
+        console.error("Confirm payment error:", err);
+        showToast("Error updating payment status.", "danger");
+    }
+}
+window.confirmUserUPIPayment = confirmUserUPIPayment;
+
