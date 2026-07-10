@@ -190,40 +190,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // TAB ROUTING
 function switchTab(tabName) {
-    if (tabName === 'customer-book') {
-        switchTab('landing');
-        setTimeout(() => {
-            const container = document.getElementById('landing-booking-container');
-            if (container) {
-                container.scrollIntoView({ behavior: 'smooth' });
-                container.style.boxShadow = '0 0 15px var(--color-coral-pulse)';
-                setTimeout(() => { container.style.boxShadow = ''; }, 1500);
-            }
-        }, 200);
-        return;
-    }
-    if (tabName === 'customer-track') {
-        switchTab('landing');
-        setTimeout(() => {
-            const container = document.getElementById('landing-tracking-section');
-            if (container) {
-                container.scrollIntoView({ behavior: 'smooth' });
-                container.style.boxShadow = '0 0 15px var(--color-coral-pulse)';
-                setTimeout(() => { container.style.boxShadow = ''; }, 1500);
-            }
-        }, 200);
-        return;
-    }
-
     if ((tabName.startsWith('customer-') || tabName === 'customer') && !currentUser) {
         showAuthMode('signin');
         return;
     }
-
-    // Update active nav button
-    document.querySelectorAll('.nav-menu .nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
-    });
 
     // Determine which main panel to display
     let targetPanel = 'landing';
@@ -234,6 +204,34 @@ function switchTab(tabName) {
     } else if (tabName === 'admin') {
         targetPanel = 'admin';
     }
+
+    // Special handling for scrolling to sections on landing page
+    if (tabName === 'customer-book') {
+        targetPanel = 'landing';
+        setTimeout(() => {
+            const container = document.getElementById('landing-booking-container');
+            if (container) {
+                container.scrollIntoView({ behavior: 'smooth' });
+                container.style.boxShadow = '0 0 15px var(--color-coral-pulse)';
+                setTimeout(() => { container.style.boxShadow = ''; }, 1500);
+            }
+        }, 200);
+    } else if (tabName === 'customer-track') {
+        targetPanel = 'landing';
+        setTimeout(() => {
+            const container = document.getElementById('landing-tracking-section');
+            if (container) {
+                container.scrollIntoView({ behavior: 'smooth' });
+                container.style.boxShadow = '0 0 15px var(--color-coral-pulse)';
+                setTimeout(() => { container.style.boxShadow = ''; }, 1500);
+            }
+        }, 200);
+    }
+
+    // Update active nav button
+    document.querySelectorAll('.nav-menu .nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+    });
 
     document.querySelectorAll('.tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `panel-${targetPanel}`);
@@ -1267,7 +1265,7 @@ async function handleNewBooking(e) {
     if (expressCheckboxReset) expressCheckboxReset.checked = false;
 
     if (currentUser) {
-        switchCustomerPanel('track');
+        switchTab('customer');
         renderActiveOrderTracking();
         updateCustomerActiveBadge();
     } else {
