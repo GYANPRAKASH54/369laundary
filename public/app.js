@@ -2184,7 +2184,7 @@ function triggerWhatsAppAPI(order, templateType) {
             messageText = `*369 Laundry Confirmation*\nHi ${order.customerName}, your laundry pickup is confirmed!\nOrder ID: *${order.orderId}*\nDate: ${order.date}\nSlot: ${order.slot}\nTotal Bill: ${billString}\n\nTrack order here: https://369laundry.app/track/${order.orderId}`;
             break;
         case 'pickup_scheduled':
-            messageText = `*369 Laundry Update*\nValet assigned to pick up your laundry for Order *${order.orderId}*.\nDriver Contact: +91 90000 11111.\nEnsure clothes are sorted in the bag.`;
+            messageText = `*369 Laundry Update*\nValet assigned to pick up your laundry for Order *${order.orderId}*.\nDriver Contact: +91 86990 13959.\nEnsure clothes are sorted in the bag.`;
             break;
         case 'picked_up':
             messageText = `*369 Laundry Alert*\nYour laundry has arrived at our state-of-the-art washing facility.\nOrder ID: *${order.orderId}*\nWe are currently weighing and inspecting your clothes. Bill details will follow instantly!`;
