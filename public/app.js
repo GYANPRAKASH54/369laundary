@@ -1470,7 +1470,7 @@ async function trackLandingOrder(optOrder) {
         'pickup_scheduled': 'user-tag',
         'picked_up': 'truck-pickup',
         'processing': 'soap',
-        'ready': 'checkroom',
+        'ready': 'shirt',
         'out_for_delivery': 'truck',
         'delivered': 'circle-check'
     };
