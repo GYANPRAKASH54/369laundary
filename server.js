@@ -149,7 +149,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     try {
         const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
-        
+
         if (!user || user.password !== password) {
             return res.status(401).json({ error: 'Invalid phone number or password.' });
         }
@@ -365,21 +365,21 @@ app.get('/api/admin/users', async (req, res) => {
 app.put('/api/admin/users/:phone/role', async (req, res) => {
     const { phone: rawPhone } = req.params;
     const { role } = req.body;
-    
+
     if (!role || !['customer', 'valet', 'admin'].includes(role)) {
         return res.status(400).json({ error: 'Valid role (customer, valet, admin) is required.' });
     }
-    
+
     const phone = normalizePhoneNumber(rawPhone);
-    
+
     try {
         const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
         if (!user) {
             return res.status(404).json({ error: 'User not found.' });
         }
-        
+
         await dbRun('UPDATE users SET role = ? WHERE phone = ?', [role, phone]);
-        
+
         // Sync valet table membership
         if (role === 'valet') {
             const existingValet = await dbGet('SELECT * FROM valets WHERE phone = ?', [phone]);
@@ -389,7 +389,7 @@ app.put('/api/admin/users/:phone/role', async (req, res) => {
         } else {
             await dbRun('DELETE FROM valets WHERE phone = ?', [phone]);
         }
-        
+
         console.log(`Updated user ${phone} role to ${role}`);
         res.json({ success: true });
     } catch (err) {
@@ -402,17 +402,17 @@ app.put('/api/admin/users/:phone/role', async (req, res) => {
 app.delete('/api/admin/users/:phone', async (req, res) => {
     const { phone: rawPhone } = req.params;
     const phone = normalizePhoneNumber(rawPhone);
-    
+
     try {
         const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
         if (!user) {
             return res.status(404).json({ error: 'User not found.' });
         }
-        
+
         await dbRun('DELETE FROM users WHERE phone = ?', [phone]);
         await dbRun('DELETE FROM valets WHERE phone = ?', [phone]);
         await dbRun('DELETE FROM addresses WHERE user_phone = ?', [phone]);
-        
+
         console.log(`Deleted user profile: ${phone}`);
         res.json({ success: true });
     } catch (err) {
@@ -578,7 +578,7 @@ app.post('/api/orders', async (req, res) => {
         }
 
         console.log(`Stored order ${orderId} in database for user ${customerPhone}`);
-        
+
         const order = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         order.items = items;
         await sendMockEmail(order, 'order_placed');
@@ -648,7 +648,7 @@ app.put('/api/orders/:orderId/metrics', async (req, res) => {
         );
 
         console.log(`Weighed order ${orderId}: Weight = ${finalWeight}kg, Count = ${finalItemsCount}, Amount = ₹${finalAmount}`);
-        
+
         const updatedOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         updatedOrder.items = items;
         await sendMockEmail(updatedOrder, 'weighed_processing');
@@ -742,9 +742,9 @@ app.post('/api/orders/:orderId/payment-reminder', async (req, res) => {
 
         const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
         order.items = items;
-        
+
         await sendMockEmail(order, 'payment_reminder');
-        
+
         console.log(`Payment Reminder notification triggered manually for Order ${orderId}`);
         res.json({ success: true, orderId });
     } catch (err) {
@@ -776,7 +776,7 @@ async function sendMockEmail(order, type) {
     if (orderPayment === 'upi' && orderAmount > 0) {
         const upiUrl = `upi://pay?pa=bharatpe09917234203@yesbankltd&pn=369%20Laundry&am=${orderAmount.toFixed(2)}&cu=INR&tn=Order-${orderId}`;
         const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUrl)}`;
-        
+
         qrSectionHtml = `
             <div style="margin: 25px 0; padding: 20px; border: 2px dashed #7b5800; border-radius: 12px; background-color: #faf9f6; text-align: center; font-family: sans-serif;">
                 <h4 style="margin: 0 0 8px 0; color: #001726; font-size: 15px; font-weight: bold;">Scan to Pay with UPI</h4>
