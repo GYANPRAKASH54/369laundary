@@ -3218,7 +3218,7 @@ function renderAdminCustomersTable(usersList) {
     if (list.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="3" class="text-center text-gray-400 p-4">
+                <td colspan="4" class="text-center text-gray-400 p-4">
                     No customers found in database.
                 </td>
             </tr>`;
@@ -3226,6 +3226,39 @@ function renderAdminCustomersTable(usersList) {
     }
 
     list.forEach(cust => {
+        const isSelf = currentUser && currentUser.phone === cust.phone;
+        
+        let roleSelectHtml = '';
+        if (isSelf) {
+            roleSelectHtml = `
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-secondary/15 text-secondary uppercase">
+                    ${cust.role}
+                </span>
+            `;
+        } else {
+            roleSelectHtml = `
+                <select class="role-selector-dropdown border border-gray-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-primary uppercase bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                        onchange="changeUserRole('${cust.phone}', this.value)">
+                    <option value="customer" ${cust.role === 'customer' ? 'selected' : ''}>Customer</option>
+                    <option value="valet" ${cust.role === 'valet' ? 'selected' : ''}>Valet</option>
+                    <option value="admin" ${cust.role === 'admin' ? 'selected' : ''}>Admin</option>
+                </select>
+            `;
+        }
+
+        let deleteBtnHtml = '';
+        if (!isSelf) {
+            deleteBtnHtml = `
+                <button class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
+                        onclick="deleteUserAccount('${cust.phone}')">
+                    <span class="material-symbols-outlined text-[12px]">delete</span>
+                    Delete
+                </button>
+            `;
+        } else {
+            deleteBtnHtml = `<span class="text-[10px] text-gray-400 font-bold italic">Self</span>`;
+        }
+
         const tr = document.createElement('tr');
         tr.className = 'border-b border-gray-100 hover:bg-gray-50/50 transition-colors';
         tr.innerHTML = `
@@ -3236,16 +3269,82 @@ function renderAdminCustomersTable(usersList) {
                     <span>${cust.email}</span>
                 </div>
             </td>
-            <td class="px-4 py-3 align-middle">
-                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${cust.role === 'admin' ? 'bg-secondary/15 text-secondary' : 'bg-primary/10 text-primary'} uppercase">
-                    ${cust.role}
-                </span>
-            </td>
+            <td class="px-4 py-3 align-middle">${roleSelectHtml}</td>
+            <td class="px-4 py-3 align-middle">${deleteBtnHtml}</td>
         `;
         tbody.appendChild(tr);
     });
 }
 window.renderAdminCustomersTable = renderAdminCustomersTable;
+
+async function changeUserRole(phone, newRole) {
+    if (useLocalFallback) {
+        showToast("Role updates require active database connection.", "warning");
+        return;
+    }
+
+    if (currentUser && currentUser.phone === phone) {
+        showToast("You cannot change your own administrator role!", "danger");
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to change this user's role to ${newRole.toUpperCase()}?`)) {
+        await syncCustomersData();
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(phone)}/role`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(`Role updated successfully to ${newRole.toUpperCase()}`, "success");
+            await syncCustomersData();
+        } else {
+            showToast(data.error || "Failed to update user role", "danger");
+        }
+    } catch (err) {
+        console.error("Change role error:", err);
+        showToast("Error updating user role.", "danger");
+    }
+}
+window.changeUserRole = changeUserRole;
+
+async function deleteUserAccount(phone) {
+    if (useLocalFallback) {
+        showToast("User deletion requires active database connection.", "warning");
+        return;
+    }
+
+    if (currentUser && currentUser.phone === phone) {
+        showToast("You cannot delete your own account!", "danger");
+        return;
+    }
+
+    if (!confirm("WARNING: Are you sure you want to delete this user profile? This will permanently delete their account, saved addresses, and active associations.")) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(phone)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast("User account deleted successfully.", "success");
+            await syncCustomersData();
+        } else {
+            showToast(data.error || "Failed to delete user profile", "danger");
+        }
+    } catch (err) {
+        console.error("Delete user error:", err);
+        showToast("Error deleting user profile.", "danger");
+    }
+}
+window.deleteUserAccount = deleteUserAccount;
 
 // ADMIN SUBTAB SWITCHER (Customers / Valets)
 let activeAdminSubTab = 'customers';

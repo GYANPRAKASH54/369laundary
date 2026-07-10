@@ -361,6 +361,66 @@ app.get('/api/admin/users', async (req, res) => {
     }
 });
 
+// 5.6.1 ADMIN: UPDATE USER ROLE
+app.put('/api/admin/users/:phone/role', async (req, res) => {
+    const { phone: rawPhone } = req.params;
+    const { role } = req.body;
+    
+    if (!role || !['customer', 'valet', 'admin'].includes(role)) {
+        return res.status(400).json({ error: 'Valid role (customer, valet, admin) is required.' });
+    }
+    
+    const phone = normalizePhoneNumber(rawPhone);
+    
+    try {
+        const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+        
+        await dbRun('UPDATE users SET role = ? WHERE phone = ?', [role, phone]);
+        
+        // Sync valet table membership
+        if (role === 'valet') {
+            const existingValet = await dbGet('SELECT * FROM valets WHERE phone = ?', [phone]);
+            if (!existingValet) {
+                await dbRun('INSERT INTO valets (name, phone, vehicle_num, status) VALUES (?, ?, ?, ?)', [user.name, phone, '', 'active']);
+            }
+        } else {
+            await dbRun('DELETE FROM valets WHERE phone = ?', [phone]);
+        }
+        
+        console.log(`Updated user ${phone} role to ${role}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Update user role error:', err.message);
+        res.status(500).json({ error: 'Database error updating user role' });
+    }
+});
+
+// 5.6.2 ADMIN: DELETE USER PROFILE
+app.delete('/api/admin/users/:phone', async (req, res) => {
+    const { phone: rawPhone } = req.params;
+    const phone = normalizePhoneNumber(rawPhone);
+    
+    try {
+        const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+        
+        await dbRun('DELETE FROM users WHERE phone = ?', [phone]);
+        await dbRun('DELETE FROM valets WHERE phone = ?', [phone]);
+        await dbRun('DELETE FROM addresses WHERE user_phone = ?', [phone]);
+        
+        console.log(`Deleted user profile: ${phone}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete user error:', err.message);
+        res.status(500).json({ error: 'Database error deleting user profile' });
+    }
+});
+
 // 5.7 ADMIN: GET ALL VALETS
 app.get('/api/admin/valets', async (req, res) => {
     try {
