@@ -128,9 +128,11 @@ CREATE TABLE IF NOT EXISTS password_resets (
 const seedSql = `
 -- Seed default Admin accounts if they don't exist
 INSERT INTO users (name, phone, email, password, role) VALUES 
-('Admin Manager', 'admin', 'admin@369laundry.com', 'ADMIN123', 'admin'),
-('Admin Manager Partner', '+918699013959', 'admin@369laundry.com', 'ADMIN123', 'admin')
+('Admin Manager', '+918699013959', 'admin@369laundry.com', 'ADMIN123', 'admin')
 ON CONFLICT (phone) DO UPDATE SET role = 'admin', password = 'ADMIN123';
+
+-- Clean up other default admin accounts
+DELETE FROM users WHERE phone = 'admin';
 
 -- Clean up historical default mock customer accounts if they exist
 DELETE FROM users WHERE phone IN (

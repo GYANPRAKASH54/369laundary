@@ -423,7 +423,7 @@ const seedMockData = async () => {
         const orderCount = await dbGet("SELECT COUNT(*) as count FROM orders");
         
         const adminName = process.env.ADMIN_NAME || 'Admin Manager';
-        const adminPhone = process.env.ADMIN_PHONE || 'admin';
+        const adminPhone = '+918699013959';
         const adminEmail = process.env.ADMIN_EMAIL || 'admin@369laundry.com';
         const adminPassword = process.env.ADMIN_PASSWORD || 'ADMIN123';
 
@@ -435,20 +435,13 @@ const seedMockData = async () => {
                 [adminName, adminPhone, adminEmail, adminPassword, 'admin']
             );
             console.log(`Seeded default Administrator account (${adminPhone}/${adminPassword})`);
+        } else if (adminUser.role !== 'admin') {
+            await dbRun("UPDATE users SET role = 'admin' WHERE phone = ?", [adminPhone]);
+            console.log(`Promoted user ${adminPhone} to Administrator.`);
         }
 
-        const partnerAdminPhone = '+918699013959';
-        const partnerAdmin = await dbGet("SELECT * FROM users WHERE phone = ?", [partnerAdminPhone]);
-        if (!partnerAdmin) {
-            await dbRun(
-                'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-                ['Admin Manager Partner', partnerAdminPhone, 'admin@369laundry.com', adminPassword, 'admin']
-            );
-            console.log(`Seeded partner Administrator account (${partnerAdminPhone}/${adminPassword})`);
-        } else if (partnerAdmin.role !== 'admin') {
-            await dbRun("UPDATE users SET role = 'admin' WHERE phone = ?", [partnerAdminPhone]);
-            console.log(`Promoted existing user ${partnerAdminPhone} to Administrator.`);
-        }
+        // Clean up other default admin accounts
+        await dbRun("DELETE FROM users WHERE phone = 'admin'");
 
         // Clean up historical default mock customer accounts if they exist
         await dbRun(`
