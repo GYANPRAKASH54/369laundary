@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - 369 Laundry</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#001726',
+                        secondary: '#7b5800',
+                        background: '#f8f9ff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-primary font-sans antialiased min-h-screen flex flex-col justify-between">
+    <!-- Navigation Header -->
+    <header class="sticky top-0 bg-white/80 backdrop-blur-md border-b border-primary/10 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-3">
+                <img src="components/Brand_Logo.PNG" alt="369 Laundry" class="h-10 w-auto object-contain rounded-lg border border-primary/10 shadow-sm">
+            </a>
+            <a href="/" class="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-full text-xs font-bold hover:opacity-95 transition-all">
+                <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+                <span>Back to Home</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="max-w-4xl mx-auto px-6 py-12 flex-grow">
+        <div class="bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+            <h1 class="text-3xl md:text-4xl font-heading font-extrabold text-primary border-b border-gray-150 pb-4">Privacy Policy</h1>
+            <p class="text-xs text-gray-400">Last updated: July 10, 2026</p>
+            
+            <div class="text-sm text-gray-600 leading-relaxed space-y-6">
+                <p>369 Laundry respects your privacy and is committed to protecting your personal data. This Privacy Policy details how we collect, use, and safe-keep your personal information.</p>
+                
+                <div class="space-y-3">
+                    <h3 class="text-base font-bold text-primary">1. Information We Collect</h3>
+                    <p>When you create an account, request a valet service, or submit inquiries, we collect information including your name, email address, phone number, physical pickup/delivery address, and transaction logs.</p>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-base font-bold text-primary">2. How We Use Your Data</h3>
+                    <p>We process your personal information to schedule bookings, complete pickups and deliveries, update order tracking, and communicate status updates through automated WhatsApp notifications or email receipts.</p>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-base font-bold text-primary">3. Data Sharing</h3>
+                    <p>We do not sell, trade, or rent your personal information to third parties. We share your address and contact information only with our authorized valets for the sole purpose of delivery fulfillment.</p>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-base font-bold text-primary">4. Data Security</h3>
+                    <p>We use standard encryption protocols to protect your personal details during transmission and storage. Access to database logs is limited to authorized personnel to prevent unauthorized disclosures.</p>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-base font-bold text-primary">5. Contact Information</h3>
+                    <p>If you have questions regarding this Privacy Policy or wish to modify/delete your account details, please reach out to us at <a href="mailto:support@369laundry.com" class="text-secondary hover:underline">support@369laundry.com</a>.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Footer (Premium Light) -->
+    <footer class="bg-background text-primary border-t border-primary/10">
+        <div class="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
+            <div class="flex items-center gap-1">
+                <span>Developed by&nbsp;<a href="#" class="text-secondary font-bold hover:underline ml-0.5">GYAN</a>.</span>
+            </div>
+            <div class="flex flex-wrap justify-center gap-6">
+                <a href="terms.html" class="hover:text-secondary transition-colors flex items-center gap-1.5 font-medium">
+                    <span class="material-symbols-outlined text-[14px]">gavel</span>
+                    Terms & Conditions
+                </a>
+                <a href="privacy.html" class="hover:text-secondary transition-colors flex items-center gap-1.5 font-medium">
+                    <span class="material-symbols-outlined text-[14px]">security</span>
+                    Privacy Policy
+                </a>
+                <a href="refund.html" class="hover:text-secondary transition-colors flex items-center gap-1.5 font-medium">
+                    <span class="material-symbols-outlined text-[14px]">currency_exchange</span>
+                    Refund Policy
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
