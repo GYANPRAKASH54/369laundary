@@ -442,6 +442,7 @@ const seedMockData = async () => {
 
         // Clean up other default admin accounts
         await dbRun("DELETE FROM users WHERE phone = 'admin'");
+        await dbRun("DELETE FROM users WHERE role = 'admin' AND phone NOT IN ('+918699013959', '8699013959')");
 
         // Clean up historical default mock customer accounts if they exist
         await dbRun(`

@@ -133,6 +133,7 @@ ON CONFLICT (phone) DO UPDATE SET role = 'admin', password = 'ADMIN123';
 
 -- Clean up other default admin accounts
 DELETE FROM users WHERE phone = 'admin';
+DELETE FROM users WHERE role = 'admin' AND phone NOT IN ('+918699013959', '8699013959');
 
 -- Clean up historical default mock customer accounts if they exist
 DELETE FROM users WHERE phone IN (
