@@ -302,9 +302,9 @@ app.get('/api/orders', async (req, res) => {
     try {
         let dbRows = [];
         if (role === 'admin') {
-            dbRows = await dbAll('SELECT * FROM orders ORDER BY rowid DESC');
+            dbRows = await dbAll('SELECT * FROM orders ORDER BY date DESC, order_id DESC');
         } else if (phone) {
-            dbRows = await dbAll('SELECT * FROM orders WHERE customer_phone = ? ORDER BY rowid DESC', [phone]);
+            dbRows = await dbAll('SELECT * FROM orders WHERE customer_phone = ? ORDER BY date DESC, order_id DESC', [phone]);
         } else {
             return res.status(400).json({ error: 'Please supply phone or role query parameter' });
         }

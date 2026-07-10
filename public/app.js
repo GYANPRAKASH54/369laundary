@@ -2192,60 +2192,101 @@ function triggerWhatsAppAPI(order, templateType) {
     showToast(`WhatsApp Template API Fired: [${templateType.replace('_', ' ')}]`, 'whatsapp');
 }
 
-// MOCK QR CODE GENERATION DRAWING ON CANVAS
-function drawMockQRCode(canvasId, text) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 90;
-    canvas.height = 90;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 90, 90);
-    ctx.fillStyle = '#000000';
-    
-    ctx.fillRect(0, 0, 25, 25);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(5, 5, 15, 15);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(8, 8, 9, 9);
-    
-    ctx.fillRect(65, 0, 25, 25);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(70, 5, 15, 15);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(73, 8, 9, 9);
-    
-    ctx.fillRect(0, 65, 25, 25);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(5, 70, 15, 15);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(8, 73, 9, 9);
-    
-    ctx.fillStyle = '#000000';
-    let seed = 0;
-    for(let i=0; i<text.length; i++) seed += text.charCodeAt(i);
-    for(let x = 0; x < 90; x += 5) {
-        for(let y = 0; y < 90; y += 5) {
-            if(x < 30 && y < 30) continue;
-            if(x > 60 && y < 30) continue;
-            if(x < 30 && y > 60) continue;
-            
-            const rand = Math.sin(seed + x * 12.9898 + y * 78.233) * 43758.5453;
-            if((rand - Math.floor(rand)) > 0.55) {
-                ctx.fillRect(x, y, 5, 5);
-            }
-        }
-    }
+// REAL DECODABLE QR CODE GENERATION DRAWING ON CANVAS
+async function drawMockQRCode(canvasId, text) {
     const container = document.getElementById(canvasId);
-    if (container) {
-        container.innerHTML = '';
-        container.appendChild(canvas);
+    if (!container) return;
+    container.innerHTML = '';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 150;
+    canvas.height = 150;
+    container.appendChild(canvas);
+
+    try {
+        await loadScriptLazy("https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js");
+        new QRious({
+            element: canvas,
+            value: text,
+            size: 150,
+            background: '#ffffff',
+            foreground: '#0f172a',
+            level: 'H'
+        });
+    } catch (err) {
+        console.warn("Failed to load QRious library offline, falling back to online Google Charts QR API", err);
+        container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(text)}" alt="QR Code" width="150" height="150" style="display: block; margin: 0 auto; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);" />`;
     }
 }
 
-// FLOATING TOASTS
+// FLOATING TOASTS - BEAUTIFUL POPUPS WITH GRAPHICS
 function showToast(msg, type = 'success') {
-    // Disabled all toast notifications entirely across the website
-    return;
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.position = 'fixed';
+        container.style.bottom = '24px';
+        container.style.right = '24px';
+        container.style.zIndex = '99999';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '8px';
+        container.style.pointerEvents = 'none';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    toast.style.pointerEvents = 'auto';
+    toast.style.minWidth = '280px';
+    toast.style.padding = '12px 16px';
+    toast.style.borderRadius = '12px';
+    toast.style.fontFamily = "'Outfit', sans-serif";
+    toast.style.fontSize = '12px';
+    toast.style.fontWeight = '600';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '8px';
+    toast.style.color = '#ffffff';
+    toast.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)';
+    toast.style.transform = 'translateY(20px)';
+    toast.style.opacity = '0';
+    toast.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    
+    let icon = 'info';
+    if (type === 'success') {
+        toast.style.backgroundColor = '#10b981';
+        icon = 'check_circle';
+    } else if (type === 'danger') {
+        toast.style.backgroundColor = '#ef4444';
+        icon = 'error';
+    } else if (type === 'warning') {
+        toast.style.backgroundColor = '#f59e0b';
+        icon = 'warning';
+    } else {
+        toast.style.backgroundColor = '#3b82f6';
+        icon = 'info';
+    }
+    
+    toast.innerHTML = `
+        <span class="material-symbols-outlined text-[18px]">${icon}</span>
+        <span style="flex-grow: 1;">${msg}</span>
+    `;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+    }, 10);
+    
+    setTimeout(() => {
+        toast.style.transform = 'translateY(-20px)';
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, 4000);
 }
 
 // 3D WASHER PANEL MANUAL OVERLAYS
@@ -2711,6 +2752,11 @@ async function openQRScannerModal() {
         modal.classList.remove('hidden');
     }
     
+    const container = document.getElementById('admin-qr-reader-container');
+    if (container) {
+        container.innerHTML = '<div id="admin-qr-reader" class="w-full"></div>';
+    }
+    
     const statusDiv = document.getElementById('admin-qr-status');
     if (statusDiv) statusDiv.innerHTML = 'Scanner status: Loading library...';
     
@@ -2736,7 +2782,22 @@ async function openQRScannerModal() {
                         console.log("QR Scan Success:", decodedText);
                         playBeep(880, 0.15, 0);
                         if (statusDiv) statusDiv.innerHTML = `<span class="text-green-600">Scanned: ${decodedText}</span>`;
-                        handleQRScanResult(decodedText.trim());
+                        
+                        if (html5QrScanner) {
+                            html5QrScanner.stop().then(() => {
+                                console.log("QR Camera stopped after success scan");
+                                html5QrScanner = null;
+                                closeQRScannerModal();
+                                handleQRScanResult(decodedText.trim());
+                            }).catch(err => {
+                                console.error("Error stopping camera on success scan:", err);
+                                closeQRScannerModal();
+                                handleQRScanResult(decodedText.trim());
+                            });
+                        } else {
+                            closeQRScannerModal();
+                            handleQRScanResult(decodedText.trim());
+                        }
                     },
                     (errorMessage) => {}
                 ).catch(err => {
@@ -3052,6 +3113,12 @@ async function submitQRWeighIn(event) {
 
         order.weight = parseFloat(simulatedWeight.toFixed(2));
         order.amount = simulatedAmount;
+
+        // Apply Express 25% Surcharge in offline fallback mode if selected
+        if (order.isExpress || order.is_express === 1 || order.is_express === true) {
+            order.amount = order.amount * 1.25;
+        }
+
         order.status = 'picked_up';
         
         if (activeOrder && activeOrder.orderId === orderId) {
