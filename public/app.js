@@ -318,7 +318,27 @@ async function syncAppData() {
         if (Array.isArray(allOrders)) {
             orders = allOrders;
             
-            if (activeOrder) {
+            if (currentUser && currentUser.role === 'customer') {
+                const matchedActive = orders.find(o => o.customerPhone === currentUser.phone && o.status !== 'delivered' && o.status !== 'cancelled');
+                if (matchedActive) {
+                    if (activeOrder && (activeOrder.status !== matchedActive.status || activeOrder.amount !== matchedActive.amount)) {
+                        if (activeOrder.status !== matchedActive.status) {
+                            showToast(`Order status updated to: ${matchedActive.status.replace('_', ' ')}`, 'info');
+                            sync3DWasherWithOrder(matchedActive.status);
+                        } else {
+                            showToast(`Final bill updated: ₹${matchedActive.amount.toFixed(2)}`, 'success');
+                        }
+                        playBeep(659.25, 0.1, 0); 
+                    }
+                    activeOrder = matchedActive;
+                    renderActiveOrderTracking();
+                    updateCustomerActiveBadge();
+                } else {
+                    activeOrder = null;
+                    renderActiveOrderTracking();
+                    updateCustomerActiveBadge();
+                }
+            } else if (activeOrder) {
                 const matched = orders.find(o => o.orderId === activeOrder.orderId);
                 if (matched) {
                     if (activeOrder.status !== matched.status || activeOrder.amount !== matched.amount) {
