@@ -565,6 +565,11 @@ function showAuthMode(mode) {
 
     // Switch tab to gatekeeper
     switchTab('gatekeeper');
+
+    const loginPanel = document.getElementById('panel-login');
+    if (loginPanel) {
+        loginPanel.scrollIntoView({ behavior: 'smooth' });
+    }
     
     // Hide dashboard contents
     const authCard = document.getElementById('customer-auth');

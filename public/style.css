@@ -1339,6 +1339,31 @@ input[type="number"] {
         padding-top: 2rem !important;
         padding-bottom: 2rem !important;
     }
+
+    /* Toast styling for mobile viewports - Top centered and compact */
+    .toast-container {
+        top: 16px !important;
+        bottom: auto !important;
+        right: 16px !important;
+        left: 16px !important;
+        align-items: center !important;
+    }
+    .toast {
+        width: 100% !important;
+        max-width: 340px !important;
+        justify-content: center !important;
+        border-radius: 12px !important;
+        padding: 10px 16px !important;
+        font-size: 13px !important;
+    }
+
+    /* Compact Table spacing for mobile devices to prevent horizontal scroll bloating */
+    table th, table td {
+        padding-left: 0.6rem !important;
+        padding-right: 0.6rem !important;
+        padding-top: 0.6rem !important;
+        padding-bottom: 0.6rem !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1361,4 +1386,19 @@ input[type="number"] {
         flex: 1 1 20% !important;
         min-width: 60px !important;
     }
+}
+
+/* iOS Safari Safe Area adjustments for Mobile Bottom Nav */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    nav.md\:hidden, nav[class*="bottom-0"] {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 8px) !important;
+        height: auto !important;
+    }
+}
+
+/* Safari Leaflet Map Border-Radius clipping fix */
+#booking-map {
+    overflow: hidden !important;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
