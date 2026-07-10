@@ -284,15 +284,21 @@ async function checkBackendConnection() {
             console.log("Connected to 369 Laundry Backend Server.");
             useLocalFallback = false;
         } else {
-            throw new Error();
+            let errorMsg = "Database connection error";
+            try {
+                const data = await response.json();
+                if (data && data.message) errorMsg = data.message;
+                else if (data && data.error) errorMsg = data.error;
+            } catch(jsonErr) {}
+            throw new Error(errorMsg);
         }
     } catch (e) {
-        console.warn("Backend server offline. Running in Local Memory Fallback Mode.");
+        console.warn("Backend server connection failed:", e.message);
         useLocalFallback = true;
         if (window.location.hostname.includes("vercel.app")) {
-            showToast("Supabase Database not connected. Set DATABASE_URL in Vercel settings.", "warning");
+            showToast(`Supabase Database not connected: ${e.message}`, "warning");
         } else {
-            showToast("Backend Server Offline. Running in simulated offline mode.", "warning");
+            showToast(`Backend Server Offline: ${e.message}`, "warning");
         }
     }
 }
