@@ -329,7 +329,8 @@ async function syncAppData() {
             orders = allOrders;
             
             if (currentUser && currentUser.role === 'customer') {
-                const matchedActive = orders.find(o => o.customerPhone === currentUser.phone && o.status !== 'delivered' && o.status !== 'cancelled');
+                const userPhone = normalizePhoneNumber(currentUser.phone);
+                const matchedActive = orders.find(o => normalizePhoneNumber(o.customerPhone) === userPhone && o.status !== 'delivered' && o.status !== 'cancelled');
                 if (matchedActive) {
                     if (activeOrder && (activeOrder.status !== matchedActive.status || activeOrder.amount !== matchedActive.amount)) {
                         if (activeOrder.status !== matchedActive.status) {
@@ -391,49 +392,44 @@ async function syncAppData() {
 }
 
 async function loadSavedAddresses() {
-    if (useLocalFallback || !currentUser) return;
+    const container = document.getElementById('booking-saved-addresses-container');
+    const select = document.getElementById('booking-saved-addresses-select');
+    
+    if (useLocalFallback || !currentUser) {
+        if (container) container.style.display = 'none';
+        return;
+    }
+    
     try {
-        const res = await fetch(`${API_BASE}/users/addresses?phone=${encodeURIComponent(currentUser.phone)}`);
+        const phone = normalizePhoneNumber(currentUser.phone);
+        const res = await fetch(`${API_BASE}/users/addresses?phone=${encodeURIComponent(phone)}`);
         if (!res.ok) throw new Error();
         const addresses = await res.json();
         
         if (addresses && addresses.length > 0) {
-            const lastAddr = addresses[addresses.length - 1];
-            const addrStr = lastAddr.address_line || "";
-            
-            let apartment = "";
-            let locality = "";
-            let landmark = "";
-            
-            const landmarkMatch = addrStr.match(/\(Landmark:\s*([^)]+)\)/i);
-            let baseAddr = addrStr;
-            if (landmarkMatch) {
-                landmark = landmarkMatch[1].trim();
-                baseAddr = addrStr.replace(/\(Landmark:\s*[^)]+\)/i, "").trim();
+            if (container) container.style.display = 'block';
+            if (select) {
+                // Clear existing options except default
+                select.innerHTML = '<option value="">-- Select a saved address --</option>';
+                
+                addresses.forEach(addr => {
+                    const opt = document.createElement('option');
+                    opt.value = JSON.stringify(addr);
+                    opt.innerText = `[${addr.type.toUpperCase()}] ${addr.address_line}`;
+                    select.appendChild(opt);
+                });
+                
+                // Automatically select and apply the last used address
+                const lastAddr = addresses[addresses.length - 1];
+                select.value = JSON.stringify(lastAddr);
+                onSavedAddressSelectChange();
             }
-            
-            const parts = baseAddr.split(',');
-            if (parts.length >= 2) {
-                apartment = parts[0].trim();
-                locality = parts.slice(1).join(',').trim();
-            } else {
-                apartment = baseAddr.trim();
-            }
-            
-            const aptEl = document.getElementById('pickup-address-apartment');
-            const locEl = document.getElementById('pickup-address-locality');
-            const lndEl = document.getElementById('pickup-address-landmark');
-            
-            if (aptEl) aptEl.value = apartment;
-            if (locEl) locEl.value = locality;
-            if (lndEl) lndEl.value = landmark;
-            
-            const typeBtn = Array.from(document.querySelectorAll('.addr-type-btn'))
-                .find(btn => btn.innerText.toLowerCase() === lastAddr.type.toLowerCase());
-            if (typeBtn) selectAddressType(typeBtn, lastAddr.type);
+        } else {
+            if (container) container.style.display = 'none';
         }
     } catch (e) {
         console.warn("Error loading saved addresses:", e.message);
+        if (container) container.style.display = 'none';
     }
 }
 
@@ -1321,7 +1317,12 @@ function switchCustomerPanel(panelName) {
 
     // Highlight the corresponding sidebar item if matched
     document.querySelectorAll('.nav-menu .nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-tab') === `customer-${panelName}`);
+        const tab = btn.getAttribute('data-tab');
+        if (tab === 'customer') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.toggle('active', tab === `customer-${panelName}`);
+        }
     });
 
     if (panelName === 'track') {
@@ -1612,8 +1613,9 @@ function renderHistory() {
     if (!container) return;
     container.innerHTML = '';
 
+    const userPhone = currentUser ? normalizePhoneNumber(currentUser.phone) : '';
     const historical = orders.filter(o => 
-        (o.customerPhone === currentUser?.phone) && 
+        (normalizePhoneNumber(o.customerPhone) === userPhone) && 
         (o.status === 'delivered' || o.status === 'cancelled')
     );
 
@@ -3987,4 +3989,52 @@ async function confirmUserUPIPayment(orderId) {
     }
 }
 window.confirmUserUPIPayment = confirmUserUPIPayment;
+
+function onSavedAddressSelectChange() {
+    const select = document.getElementById('booking-saved-addresses-select');
+    if (!select) return;
+    
+    const value = select.value;
+    if (!value) return;
+    
+    try {
+        const data = JSON.parse(value);
+        const addrStr = data.address_line || "";
+        const type = data.type || "home";
+        
+        let apartment = "";
+        let locality = "";
+        let landmark = "";
+        
+        const landmarkMatch = addrStr.match(/\(Landmark:\s*([^)]+)\)/i);
+        let baseAddr = addrStr;
+        if (landmarkMatch) {
+            landmark = landmarkMatch[1].trim();
+            baseAddr = addrStr.replace(/\(Landmark:\s*[^)]+\)/i, "").trim();
+        }
+        
+        const parts = baseAddr.split(',');
+        if (parts.length >= 2) {
+            apartment = parts[0].trim();
+            locality = parts.slice(1).join(',').trim();
+        } else {
+            apartment = baseAddr.trim();
+        }
+        
+        const aptEl = document.getElementById('pickup-address-apartment');
+        const locEl = document.getElementById('pickup-address-locality');
+        const lndEl = document.getElementById('pickup-address-landmark');
+        
+        if (aptEl) aptEl.value = apartment;
+        if (locEl) locEl.value = locality;
+        if (lndEl) lndEl.value = landmark;
+        
+        const typeBtn = Array.from(document.querySelectorAll('.addr-type-btn'))
+            .find(btn => btn.innerText.toLowerCase() === type.toLowerCase());
+        if (typeBtn) selectAddressType(typeBtn, type);
+    } catch(e) {
+        console.error("Error parsing selected address:", e);
+    }
+}
+window.onSavedAddressSelectChange = onSavedAddressSelectChange;
 

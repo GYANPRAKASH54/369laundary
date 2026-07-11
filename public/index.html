@@ -517,6 +517,16 @@
                                     <span class="material-symbols-outlined text-secondary">location_on</span>
                                     Pickup & Drop Coordinates
                                 </h5>
+                                
+                                <!-- Saved Addresses Select Dropdown (visible when logged in and has addresses) -->
+                                <div id="booking-saved-addresses-container" style="display: none;" class="space-y-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Use Saved Address</label>
+                                    <select id="booking-saved-addresses-select" onchange="onSavedAddressSelectChange()"
+                                        class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm">
+                                        <option value="">-- Select a saved address --</option>
+                                    </select>
+                                </div>
+
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div class="space-y-1">
                                         <label
