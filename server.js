@@ -6,6 +6,8 @@ const path = require('path');
 const { exec } = require('child_process');
 const { initDb, dbRun, dbAll, dbGet } = require('./db');
 
+const compression = require('compression');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -13,12 +15,42 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'public')));
+// Enable Brotli/Gzip compression middleware for optimized asset transmission
+app.use(compression());
+
+// Development-only API Response Time Monitor
+app.use((req, res, next) => {
+    const start = process.hrtime();
+    res.on('finish', () => {
+        const duration = process.hrtime(start);
+        const durationMs = (duration[0] * 1000 + duration[1] / 1e6).toFixed(2);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[API Monitor] ${req.method} ${req.originalUrl} - ${res.statusCode} - ${durationMs}ms`);
+        }
+    });
+    next();
+});
+
+// Serve static frontend files with premium Cache-Control policies (immutable for assets, stale-check for HTML)
+app.use(express.static(path.join(__dirname, 'public'), {
+    maxAge: 31536000000, // 1 year in ms
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+        } else {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    }
+}));
 
 // Serve index.html at root
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Lightweight ping endpoint to warm serverless function
+app.get('/api/ping', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Initialize SQLite database
@@ -208,7 +240,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             </div>
         `;
 
-        await sendMockEmail(email, "Reset Your 369 Laundry Password", emailHtml);
+        triggerEmailAsync(email, "Reset Your 369 Laundry Password", emailHtml);
         res.json({ success: true, message: 'Password reset link and code sent to your email.' });
     } catch (err) {
         console.error('Forgot password error:', err.message);
@@ -330,18 +362,32 @@ app.get('/api/orders', async (req, res) => {
             paymentStatus: order.payment_status || 'pending'
         }));
 
-        for (let order of mappedOrders) {
-            const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [order.orderId]);
-            order.items = items.map(item => ({
-                id: item.id.toString(),
-                name: item.name,
-                qty: item.qty,
-                totalWeight: item.weight,
-                serviceCode: item.service_code,
-                serviceLabel: item.service_label,
-                unitPrice: item.unit_price,
-                totalPrice: item.total_price
-            }));
+        if (mappedOrders.length > 0) {
+            const orderIds = mappedOrders.map(o => o.orderId);
+            const placeholders = orderIds.map(() => '?').join(',');
+            const allItems = await dbAll(`SELECT * FROM order_items WHERE order_id IN (${placeholders})`, orderIds);
+
+            const itemsByOrderId = {};
+            for (const item of allItems) {
+                const oId = item.order_id;
+                if (!itemsByOrderId[oId]) {
+                    itemsByOrderId[oId] = [];
+                }
+                itemsByOrderId[oId].push({
+                    id: item.id.toString(),
+                    name: item.name,
+                    qty: item.qty,
+                    totalWeight: item.weight,
+                    serviceCode: item.service_code,
+                    serviceLabel: item.service_label,
+                    unitPrice: item.unit_price,
+                    totalPrice: item.total_price
+                });
+            }
+
+            for (let order of mappedOrders) {
+                order.items = itemsByOrderId[order.orderId] || [];
+            }
         }
 
         res.json(mappedOrders);
@@ -583,7 +629,7 @@ app.post('/api/orders', async (req, res) => {
 
         const order = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         order.items = items;
-        await sendMockEmail(order, 'order_placed');
+        triggerEmailAsync(order, 'order_placed');
 
         res.status(201).json({ success: true, orderId });
     } catch (err) {
@@ -653,7 +699,7 @@ app.put('/api/orders/:orderId/metrics', async (req, res) => {
 
         const updatedOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         updatedOrder.items = items;
-        await sendMockEmail(updatedOrder, 'weighed_processing');
+        triggerEmailAsync(updatedOrder, 'weighed_processing');
 
         res.json({ success: true, orderId, weight: finalWeight, amount: finalAmount, status: 'processing' });
     } catch (err) {
@@ -683,7 +729,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         const updatedOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
         updatedOrder.items = items;
-        await sendMockEmail(updatedOrder, status);
+        triggerEmailAsync(updatedOrder, status);
 
         res.json({ success: true, orderId, status });
     } catch (err) {
@@ -712,7 +758,7 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
         const updatedOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
         updatedOrder.items = items;
-        await sendMockEmail(updatedOrder, 'cancelled');
+        triggerEmailAsync(updatedOrder, 'cancelled');
 
         res.json({ success: true, orderId, status: 'cancelled' });
     } catch (err) {
@@ -770,7 +816,7 @@ app.post('/api/orders/:orderId/payment-reminder', async (req, res) => {
         const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
         order.items = items;
 
-        await sendMockEmail(order, 'payment_reminder');
+        triggerEmailAsync(order, 'payment_reminder');
 
         console.log(`Payment Reminder notification triggered manually for Order ${orderId}`);
         res.json({ success: true, orderId });
@@ -781,26 +827,47 @@ app.post('/api/orders/:orderId/payment-reminder', async (req, res) => {
 });
 
 
-// MOCK SMTP EMAIL SENDER & LOG PERSISTER
+// Run email sending asynchronously in the background without blocking the HTTP response
+function triggerEmailAsync(order, type, bodyOverride) {
+    sendMockEmail(order, type, bodyOverride).catch(err => {
+        console.error(`[Background Email Error] Failed to send ${type} email:`, err.message);
+    });
+}
+
 // MOCK SMTP EMAIL SENDER & LOG PERSISTER
 async function sendMockEmail(order, type) {
     const timestamp = new Date().toLocaleString();
     let subject = '';
     let body = '';
 
-    const orderAmount = order.amount !== undefined ? order.amount : 0;
-    const orderWeight = order.weight !== undefined ? order.weight : 0;
-    const orderId = order.order_id || order.orderId;
-    const customerName = order.customer_name || order.customerName;
-    const customerEmail = order.customer_email || order.customerEmail;
-    const orderPayment = order.payment;
+    let customerEmail = '';
+    let orderId = '';
+    let customerName = 'Customer';
+    let orderAmount = 0;
+    let orderWeight = 0;
+    let orderPayment = 'cash';
+    let orderPaymentStatus = 'pending';
+
+    if (typeof order === 'string') {
+        customerEmail = order;
+        subject = type;
+        body = arguments[2] || '';
+        orderId = 'SYSTEM';
+    } else if (order) {
+        orderAmount = order.amount !== undefined ? order.amount : 0;
+        orderWeight = order.weight !== undefined ? order.weight : 0;
+        orderId = order.order_id || order.orderId;
+        customerName = order.customer_name || order.customerName;
+        customerEmail = order.customer_email || order.customerEmail;
+        orderPayment = order.payment || 'cash';
+        orderPaymentStatus = order.payment_status || order.paymentStatus || 'pending';
+    }
 
     const billString = orderAmount > 0 ? `₹${orderAmount.toFixed(2)}` : 'Awaiting weight measurement at facility';
     const weightString = orderWeight > 0 ? `${orderWeight} kg` : 'Awaiting weigh-in';
 
     // Generate dynamic UPI Scan-to-Pay QR code block if billing is active (regardless of selected payment option)
     let qrSectionHtml = '';
-    const orderPaymentStatus = order.payment_status || order.paymentStatus || 'pending';
     if (orderAmount > 0 && orderPaymentStatus === 'pending') {
         const upiUrl = `upi://pay?pa=bharatpe09917234203@yesbankltd&pn=369%20Laundry&am=${orderAmount.toFixed(2)}&cu=INR&tn=Order-${orderId}`;
         const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUrl)}`;
