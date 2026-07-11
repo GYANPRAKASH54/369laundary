@@ -45,7 +45,7 @@ let useLocalFallback = false;
             options = options || {};
             options.headers = options.headers || {};
             
-            const token = localStorage.getItem('washing_basket_token');
+            const token = localStorage.getItem('369laundary_token');
             if (token) {
                 if (options.headers instanceof Headers) {
                     options.headers.set('Authorization', `Bearer ${token}`);
@@ -172,7 +172,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     initAdminChart();
 
     // Restore user session from localStorage if present
-    const storedUser = localStorage.getItem('washing_basket_user');
+    const storedUser = localStorage.getItem('369laundary_user');
     if (storedUser) {
         try {
             currentUser = JSON.parse(storedUser);
@@ -788,9 +788,9 @@ async function handleAdminLoginSubmit(e) {
 
 function applyLoginState(user, token) {
     currentUser = user;
-    localStorage.setItem('washing_basket_user', JSON.stringify(user));
+    localStorage.setItem('369laundary_user', JSON.stringify(user));
     if (token) {
-        localStorage.setItem('washing_basket_token', token);
+        localStorage.setItem('369laundary_token', token);
     }
 
     // Update mobile bottom navigation bar dynamically
@@ -873,8 +873,8 @@ function handleLogout() {
     currentUser = null;
     activeOrder = null;
     currentBasket = [];
-    localStorage.removeItem('washing_basket_user');
-    localStorage.removeItem('washing_basket_token');
+    localStorage.removeItem('369laundary_user');
+    localStorage.removeItem('369laundary_token');
     renderBasket();
 
     // Reset mobile navigation bar to guest states
