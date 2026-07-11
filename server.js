@@ -8,6 +8,92 @@ const { initDb, dbRun, dbAll, dbGet } = require('./db');
 
 const compression = require('compression');
 
+const crypto = require('crypto');
+
+// Generate static secret key based on env or generate a persistent fallback
+const TOKEN_SECRET = process.env.TOKEN_SECRET || "1cd9723ef97f0a39ffd9b711ae3d38d7be79b74f001726a55b66d8b22"; // 64 chars hex
+
+// Cryptographic token encryption/decryption (AES-256-CBC)
+function createToken(payload) {
+    try {
+        const key = Buffer.from(TOKEN_SECRET.substring(0, 64), 'hex').slice(0, 32); // 32 bytes
+        const iv = Buffer.from(TOKEN_SECRET.substring(0, 32), 'hex').slice(0, 16);  // 16 bytes
+        const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+        let encrypted = cipher.update(JSON.stringify(payload), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        return encrypted;
+    } catch(e) {
+        console.error("Token creation failed:", e.message);
+        return null;
+    }
+}
+
+function verifyToken(token) {
+    if (!token) return null;
+    try {
+        const key = Buffer.from(TOKEN_SECRET.substring(0, 64), 'hex').slice(0, 32); // 32 bytes
+        const iv = Buffer.from(TOKEN_SECRET.substring(0, 32), 'hex').slice(0, 16);  // 16 bytes
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(token, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return JSON.parse(decrypted);
+    } catch (err) {
+        return null;
+    }
+}
+
+// Password hashing helper (PBKDF2-SHA512 + Salt)
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedPassword) {
+    if (!storedPassword) return false;
+    // Fallback support for older plaintext accounts
+    if (!storedPassword.includes(':')) {
+        return password === storedPassword;
+    }
+    const [salt, originalHash] = storedPassword.split(':');
+    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    return hash === originalHash;
+}
+
+// Request authentication middleware
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Access denied: Authentication token required.' });
+    }
+    
+    const decoded = verifyToken(token);
+    if (!decoded) {
+        return res.status(403).json({ error: 'Access denied: Invalid or expired token.' });
+    }
+    
+    req.user = decoded;
+    next();
+}
+
+// Role restriction middleware
+function requireRole(roles) {
+    return (req, res, next) => {
+        if (!req.user || !roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Access denied: Insufficient permissions.' });
+        }
+        next();
+    };
+}
+
+// Input XSS sanitization helper
+function sanitizeInput(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -17,6 +103,15 @@ app.use(bodyParser.json());
 
 // Enable Brotli/Gzip compression middleware for optimized asset transmission
 app.use(compression());
+
+// Register strict browser security headers (CSP, X-Frame-Options, no-sniff, referrer-policy)
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy', "default-src 'self' http://localhost:3000; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://api.qrserver.com https://*.tile.openstreetmap.org https://unpkg.com; media-src 'self';");
+    next();
+});
 
 // Development-only API Response Time Monitor
 app.use((req, res, next) => {
@@ -136,7 +231,8 @@ app.post('/api/auth/signup', async (req, res) => {
         return res.status(400).json({ error: 'All fields (name, phone, email, password) are required.' });
     }
 
-    if (!isValidEmail(email)) {
+    const cleanEmail = sanitizeInput(email).toLowerCase().trim();
+    if (!isValidEmail(cleanEmail)) {
         return res.status(400).json({ error: 'Invalid email address format. Must be user@domain.com' });
     }
 
@@ -145,6 +241,8 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     const phone = normalizePhoneNumber(rawPhone);
+    const cleanName = sanitizeInput(name);
+    const hashedPassword = hashPassword(password);
 
     try {
         const existingPhone = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
@@ -152,18 +250,20 @@ app.post('/api/auth/signup', async (req, res) => {
             return res.status(400).json({ error: 'This phone number has already been registered.' });
         }
 
-        const existingEmail = await dbGet('SELECT * FROM users WHERE email = ?', [email]);
+        const existingEmail = await dbGet('SELECT * FROM users WHERE email = ?', [cleanEmail]);
         if (existingEmail) {
             return res.status(400).json({ error: 'This email address has already been registered.' });
         }
 
         await dbRun(
             'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-            [name, phone, email, password, 'customer']
+            [cleanName, phone, cleanEmail, hashedPassword, 'customer']
         );
         const newUser = await dbGet('SELECT id, name, phone, email, role FROM users WHERE phone = ?', [phone]);
-        console.log(`Registered new user: ${name} (${phone})`);
-        res.json({ success: true, user: newUser });
+        console.log(`Registered new user: ${cleanName} (${phone})`);
+        
+        const token = createToken(newUser);
+        res.json({ success: true, user: newUser, token });
     } catch (err) {
         console.error('Signup error:', err.message);
         res.status(500).json({ error: 'Database error occurred during registration' });
@@ -182,13 +282,14 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
 
-        if (!user || user.password !== password) {
+        if (!user || !verifyPassword(password, user.password)) {
             return res.status(401).json({ error: 'Invalid phone number or password.' });
         }
 
         console.log(`Logged in: ${user.name} (${user.role})`);
         const safeUser = { id: user.id, name: user.name, phone: user.phone, email: user.email, role: user.role };
-        res.json({ success: true, user: safeUser });
+        const token = createToken(safeUser);
+        res.json({ success: true, user: safeUser, token });
     } catch (err) {
         console.error('Login error:', err.message);
         res.status(500).json({ error: 'Database error occurred during login' });
@@ -271,8 +372,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
             return res.status(400).json({ error: 'Verification code has expired.' });
         }
 
-        // Update the user's password in the users table
-        await dbRun('UPDATE users SET password = ? WHERE email = ?', [password, email]);
+        // Update the user's password in the users table with standard PBKDF2 hash
+        const hashedPassword = hashPassword(password);
+        await dbRun('UPDATE users SET password = ? WHERE email = ?', [hashedPassword, email]);
 
         // Clean up password resets
         await dbRun('DELETE FROM password_resets WHERE email = ?', [email]);
@@ -285,13 +387,18 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // 3. ADDRESS BOOK: GET ADDRESSES
-app.get('/api/users/addresses', async (req, res) => {
+app.get('/api/users/addresses', authenticateToken, async (req, res) => {
     const { phone: rawPhone } = req.query;
     if (!rawPhone) {
         return res.status(400).json({ error: 'User phone is required' });
     }
 
     const phone = normalizePhoneNumber(rawPhone);
+
+    // Customers can only view their own address book
+    if (req.user.role === 'customer' && normalizePhoneNumber(req.user.phone) !== phone) {
+        return res.status(403).json({ error: 'Access denied: You cannot view addresses for another user.' });
+    }
 
     try {
         const addresses = await dbAll('SELECT * FROM addresses WHERE user_phone = ?', [phone]);
@@ -303,7 +410,7 @@ app.get('/api/users/addresses', async (req, res) => {
 });
 
 // 4. ADDRESS BOOK: ADD ADDRESS
-app.post('/api/users/addresses', async (req, res) => {
+app.post('/api/users/addresses', authenticateToken, async (req, res) => {
     const { phone: rawPhone, type, address_line } = req.body;
     if (!rawPhone || !type || !address_line) {
         return res.status(400).json({ error: 'Phone, type, and address_line are required' });
@@ -311,14 +418,22 @@ app.post('/api/users/addresses', async (req, res) => {
 
     const phone = normalizePhoneNumber(rawPhone);
 
+    // Customers can only append to their own address book
+    if (req.user.role === 'customer' && normalizePhoneNumber(req.user.phone) !== phone) {
+        return res.status(403).json({ error: 'Access denied: You cannot modify addresses for another user.' });
+    }
+
+    const cleanType = sanitizeInput(type);
+    const cleanAddressLine = sanitizeInput(address_line);
+
     try {
         const existing = await dbGet(
             'SELECT * FROM addresses WHERE user_phone = ? AND type = ? AND address_line = ?',
-            [phone, type, address_line]
+            [phone, cleanType, cleanAddressLine]
         );
 
         if (!existing) {
-            await dbRun('INSERT INTO addresses (user_phone, type, address_line) VALUES (?, ?, ?)', [phone, type, address_line]);
+            await dbRun('INSERT INTO addresses (user_phone, type, address_line) VALUES (?, ?, ?)', [phone, cleanType, cleanAddressLine]);
         }
         res.json({ success: true });
     } catch (err) {
@@ -328,15 +443,25 @@ app.post('/api/users/addresses', async (req, res) => {
 });
 
 // 5. ORDERS: GET ORDERS (Admin or specific Customer - MAPPED TO CAMELCASE)
-app.get('/api/orders', async (req, res) => {
+app.get('/api/orders', authenticateToken, async (req, res) => {
     const { phone, role } = req.query;
+
+    // Verify ownership and roles
+    if (req.user.role === 'customer') {
+        const queryPhone = normalizePhoneNumber(phone || req.user.phone);
+        if (normalizePhoneNumber(req.user.phone) !== queryPhone) {
+            return res.status(403).json({ error: 'Access denied: You can only query your own orders.' });
+        }
+    } else if (req.user.role !== 'admin' && req.user.role !== 'valet') {
+        return res.status(403).json({ error: 'Access denied: Insufficient permissions.' });
+    }
 
     try {
         let dbRows = [];
-        if (role === 'admin') {
+        if (role === 'admin' || req.user.role === 'admin' || req.user.role === 'valet') {
             dbRows = await dbAll('SELECT * FROM orders ORDER BY date DESC, order_id DESC');
         } else if (phone) {
-            dbRows = await dbAll('SELECT * FROM orders WHERE customer_phone = ? ORDER BY date DESC, order_id DESC', [phone]);
+            dbRows = await dbAll('SELECT * FROM orders WHERE customer_phone = ? ORDER BY date DESC, order_id DESC', [normalizePhoneNumber(phone)]);
         } else {
             return res.status(400).json({ error: 'Please supply phone or role query parameter' });
         }
@@ -398,7 +523,7 @@ app.get('/api/orders', async (req, res) => {
 });
 
 // 5.6 ADMIN: GET ALL REGISTERED USERS
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
         const users = await dbAll('SELECT name, phone, email, role FROM users ORDER BY name ASC');
         res.json(users);
@@ -409,7 +534,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // 5.6.1 ADMIN: UPDATE USER ROLE
-app.put('/api/admin/users/:phone/role', async (req, res) => {
+app.put('/api/admin/users/:phone/role', authenticateToken, requireRole(['admin']), async (req, res) => {
     const { phone: rawPhone } = req.params;
     const { role } = req.body;
 
@@ -480,7 +605,7 @@ app.get('/api/admin/valets', async (req, res) => {
 });
 
 // 5.8 ADMIN: CREATE NEW STAFF VALET
-app.post('/api/admin/valets', async (req, res) => {
+app.post('/api/admin/valets', authenticateToken, requireRole(['admin']), async (req, res) => {
     const { name, phone: rawPhone, vehicle_num, password } = req.body;
     if (!name || !rawPhone || !password) {
         return res.status(400).json({ error: 'Name, Phone, and Password are required' });
@@ -489,14 +614,18 @@ app.post('/api/admin/valets', async (req, res) => {
         return res.status(400).json({ error: 'Invalid Indian phone number for valet. Please enter a valid 10-digit mobile number.' });
     }
     const phone = normalizePhoneNumber(rawPhone);
+    const cleanName = sanitizeInput(name);
+    const cleanVehicleNum = sanitizeInput(vehicle_num || '');
+    const hashedPassword = hashPassword(password);
+
     try {
         await dbRun(
             'INSERT INTO valets (name, phone, vehicle_num, status) VALUES (?, ?, ?, ?)',
-            [name, phone, vehicle_num || '', 'active']
+            [cleanName, phone, cleanVehicleNum, 'active']
         );
         await dbRun(
             'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-            [name, phone, `${phone.replace(/\s+/g, '')}@369laundry.com`, password, 'valet']
+            [cleanName, phone, `${phone.replace(/\s+/g, '')}@369laundry.com`, hashedPassword, 'valet']
         );
         res.status(201).json({ success: true });
     } catch (err) {
@@ -579,7 +708,7 @@ app.get('/api/orders/next-id', async (req, res) => {
 });
 
 // 6. ORDERS: PLACE ORDER
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', authenticateToken, async (req, res) => {
     const {
         orderId, customerName, customerPhone: rawPhone, customerEmail, date, slot, address, addressType, payment, weight, itemsCount, amount, status, timestamp, items, latitude, longitude, isExpress
     } = req.body;
@@ -588,7 +717,15 @@ app.post('/api/orders', async (req, res) => {
         return res.status(400).json({ error: 'Incomplete order details or empty basket' });
     }
 
-    if (customerEmail && !isValidEmail(customerEmail)) {
+    const customerPhone = normalizePhoneNumber(rawPhone);
+
+    // Verify ownership
+    if (req.user.role === 'customer' && normalizePhoneNumber(req.user.phone) !== customerPhone) {
+        return res.status(403).json({ error: 'Access denied: You cannot place orders on behalf of another phone number.' });
+    }
+
+    const cleanEmail = sanitizeInput(customerEmail);
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
         return res.status(400).json({ error: 'Invalid customer email address.' });
     }
 
@@ -596,7 +733,23 @@ app.post('/api/orders', async (req, res) => {
         return res.status(400).json({ error: 'Invalid customer phone number. Must be a valid 10-digit Indian mobile.' });
     }
 
-    const customerPhone = normalizePhoneNumber(rawPhone);
+    // Business Logic Validations
+    if (parseFloat(amount) < 0) {
+        return res.status(400).json({ error: 'Invalid order amount.' });
+    }
+    if (parseFloat(weight) < 0) {
+        return res.status(400).json({ error: 'Invalid order weight.' });
+    }
+    if (parseInt(itemsCount) <= 0) {
+        return res.status(400).json({ error: 'Invalid items count.' });
+    }
+
+    const cleanName = sanitizeInput(customerName);
+    const cleanAddress = sanitizeInput(address);
+    const cleanAddressType = sanitizeInput(addressType);
+    const cleanSlot = sanitizeInput(slot);
+    const cleanDate = sanitizeInput(date);
+    const cleanStatus = sanitizeInput(status || 'pending');
 
     try {
         await dbRun(`
@@ -604,16 +757,24 @@ app.post('/api/orders', async (req, res) => {
                 order_id, customer_name, customer_phone, customer_email, date, slot, address, address_type, payment, weight, items_count, amount, status, timestamp, latitude, longitude, is_express
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            orderId, customerName, customerPhone, customerEmail, date, slot, address, addressType, payment, weight, itemsCount, amount, status, timestamp, parseFloat(latitude || 0), parseFloat(longitude || 0), isExpress ? 1 : 0
+            orderId, cleanName, customerPhone, cleanEmail, cleanDate, cleanSlot, cleanAddress, cleanAddressType, payment, parseFloat(weight), parseInt(itemsCount), parseFloat(amount), cleanStatus, timestamp, parseFloat(latitude || 0), parseFloat(longitude || 0), isExpress ? 1 : 0
         ]);
 
         for (const item of items) {
+            if (parseInt(item.qty) <= 0 || parseFloat(item.totalWeight) < 0 || parseFloat(item.unitPrice) < 0 || parseFloat(item.totalPrice) < 0) {
+                return res.status(400).json({ error: 'Invalid item values detected.' });
+            }
+
+            const cleanItemName = sanitizeInput(item.name);
+            const cleanServiceLabel = sanitizeInput(item.serviceLabel);
+            const cleanServiceCode = sanitizeInput(item.serviceCode);
+
             await dbRun(`
                 INSERT INTO order_items (
                     order_id, name, qty, weight, service_code, service_label, unit_price, total_price
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [
-                orderId, item.name, item.qty, item.totalWeight, item.serviceCode, item.serviceLabel, item.unitPrice, item.totalPrice
+                orderId, cleanItemName, parseInt(item.qty), parseFloat(item.totalWeight), cleanServiceCode, cleanServiceLabel, parseFloat(item.unitPrice), parseFloat(item.totalPrice)
             ]);
         }
 
@@ -639,9 +800,16 @@ app.post('/api/orders', async (req, res) => {
 });
 
 // 7. ORDERS: UPDATE WEIGHT & CALC PRICE (Admin weighing)
-app.put('/api/orders/:orderId/metrics', async (req, res) => {
+app.put('/api/orders/:orderId/metrics', authenticateToken, requireRole(['admin', 'valet']), async (req, res) => {
     const { orderId } = req.params;
     const { weight, items_count } = req.body;
+
+    if (weight !== undefined && weight !== null && parseFloat(weight) < 0) {
+        return res.status(400).json({ error: 'Weight cannot be negative' });
+    }
+    if (items_count !== undefined && items_count !== null && parseInt(items_count) < 0) {
+        return res.status(400).json({ error: 'Items count cannot be negative' });
+    }
 
     try {
         const order = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
@@ -708,8 +876,8 @@ app.put('/api/orders/:orderId/metrics', async (req, res) => {
     }
 });
 
-// 8. ORDERS: UPDATE STATUS (Admin)
-app.put('/api/orders/:orderId/status', async (req, res) => {
+// 8. ORDERS: UPDATE STATUS (Admin/Valet)
+app.put('/api/orders/:orderId/status', authenticateToken, requireRole(['admin', 'valet']), async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
 
@@ -723,29 +891,35 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        await dbRun('UPDATE orders SET status = ? WHERE order_id = ?', [status, orderId]);
-        console.log(`Updated order ${orderId} status to ${status}`);
+        const cleanStatus = sanitizeInput(status);
+        await dbRun('UPDATE orders SET status = ? WHERE order_id = ?', [cleanStatus, orderId]);
+        console.log(`Updated order ${orderId} status to ${cleanStatus}`);
 
         const updatedOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         const items = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
         updatedOrder.items = items;
-        triggerEmailAsync(updatedOrder, status);
+        triggerEmailAsync(updatedOrder, cleanStatus);
 
-        res.json({ success: true, orderId, status });
+        res.json({ success: true, orderId, status: cleanStatus });
     } catch (err) {
         console.error('Update status error:', err.message);
         res.status(500).json({ error: 'Database error updating status' });
     }
 });
 
-// 9. ORDERS: CANCEL ORDER (Customer)
-app.put('/api/orders/:orderId/cancel', async (req, res) => {
+// 9. ORDERS: CANCEL ORDER (Customer/Admin)
+app.put('/api/orders/:orderId/cancel', authenticateToken, async (req, res) => {
     const { orderId } = req.params;
 
     try {
         const order = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         if (!order) {
             return res.status(404).json({ error: 'Order not found' });
+        }
+
+        // Customer can only cancel their own orders
+        if (req.user.role === 'customer' && normalizePhoneNumber(req.user.phone) !== normalizePhoneNumber(order.customer_phone)) {
+            return res.status(403).json({ error: 'Access denied: You can only cancel your own orders.' });
         }
 
         if (order.status !== 'pending' && order.status !== 'pickup_scheduled') {
@@ -767,8 +941,8 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
     }
 });
 
-// 9.5 ORDERS: UPDATE PAYMENT STATUS
-app.put('/api/orders/:orderId/payment-status', async (req, res) => {
+// 9.5 ORDERS: UPDATE PAYMENT STATUS (Customer/Valet/Admin)
+app.put('/api/orders/:orderId/payment-status', authenticateToken, async (req, res) => {
     const { orderId } = req.params;
     const { paymentStatus } = req.body;
 
@@ -782,6 +956,11 @@ app.put('/api/orders/:orderId/payment-status', async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
+        // Customer can only mark their own order as paid
+        if (req.user.role === 'customer' && normalizePhoneNumber(req.user.phone) !== normalizePhoneNumber(order.customer_phone)) {
+            return res.status(403).json({ error: 'Access denied: You can only update payment status of your own orders.' });
+        }
+
         await dbRun('UPDATE orders SET payment_status = ? WHERE order_id = ?', [paymentStatus, orderId]);
         console.log(`Updated payment status of order ${orderId} to ${paymentStatus}`);
 
@@ -793,7 +972,7 @@ app.put('/api/orders/:orderId/payment-status', async (req, res) => {
 });
 
 // 10. GET EMAIL LOGS (Admin view)
-app.get('/api/email/logs', async (req, res) => {
+app.get('/api/email/logs', authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
         const logs = await dbAll('SELECT * FROM email_logs ORDER BY id DESC');
         res.json(logs);
@@ -803,8 +982,8 @@ app.get('/api/email/logs', async (req, res) => {
     }
 });
 
-// 11. POST PAYMENT REMINDER (Admin manual trigger notification)
-app.post('/api/orders/:orderId/payment-reminder', async (req, res) => {
+// 11. POST PAYMENT REMINDER (Admin/Valet manual trigger notification)
+app.post('/api/orders/:orderId/payment-reminder', authenticateToken, requireRole(['admin', 'valet']), async (req, res) => {
     const { orderId } = req.params;
 
     try {

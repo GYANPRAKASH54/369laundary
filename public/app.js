@@ -37,6 +37,34 @@ let waterGain = null;
 const API_BASE = window.location.origin === "file://" ? "http://localhost:3000/api" : `${window.location.origin}/api`;
 let useLocalFallback = false;
 
+// Global fetch interceptor to automatically attach authorization Bearer headers
+(function() {
+    const originalFetch = window.fetch;
+    window.fetch = async function(url, options) {
+        if (typeof url === 'string' && url.includes(API_BASE) && !url.includes('/auth/')) {
+            options = options || {};
+            options.headers = options.headers || {};
+            
+            const token = localStorage.getItem('washing_basket_token');
+            if (token) {
+                if (options.headers instanceof Headers) {
+                    options.headers.set('Authorization', `Bearer ${token}`);
+                } else if (Array.isArray(options.headers)) {
+                    const existingIdx = options.headers.findIndex(h => h[0].toLowerCase() === 'authorization');
+                    if (existingIdx > -1) {
+                        options.headers[existingIdx][1] = `Bearer ${token}`;
+                    } else {
+                        options.headers.push(['Authorization', `Bearer ${token}`]);
+                    }
+                } else {
+                    options.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+        }
+        return originalFetch(url, options);
+    };
+})();
+
 // Dynamic Lazy Load Scripts/Stylesheets
 function loadScriptLazy(url) {
     return new Promise((resolve, reject) => {
@@ -602,7 +630,7 @@ async function handleSignInSubmit(e) {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                applyLoginState(data.user);
+                applyLoginState(data.user, data.token);
                 showToast(`Signed in successfully. Welcome back, ${currentUser.name}!`, 'success');
             } else {
                 showToast(data.error || "Authentication failed", "danger");
@@ -702,7 +730,7 @@ async function handleSignUpSubmit(e) {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                applyLoginState(data.user);
+                applyLoginState(data.user, data.token);
                 showToast(`Registration complete. Welcome to 369 Laundry, ${name}!`, 'success');
             } else {
                 showToast(data.error || "Sign Up failed", "danger");
@@ -734,7 +762,7 @@ async function handleAdminLoginSubmit(e) {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                applyLoginState(data.user);
+                applyLoginState(data.user, data.token);
                 showToast(`Administrator authenticated successfully. Welcome, Admin.`, 'success');
                 switchTab('admin');
             } else {
@@ -758,9 +786,12 @@ async function handleAdminLoginSubmit(e) {
     }
 }
 
-function applyLoginState(user) {
+function applyLoginState(user, token) {
     currentUser = user;
     localStorage.setItem('washing_basket_user', JSON.stringify(user));
+    if (token) {
+        localStorage.setItem('washing_basket_token', token);
+    }
 
     // Update mobile bottom navigation bar dynamically
     const mobDash = document.getElementById('mobile-nav-dashboard');
@@ -843,6 +874,7 @@ function handleLogout() {
     activeOrder = null;
     currentBasket = [];
     localStorage.removeItem('washing_basket_user');
+    localStorage.removeItem('washing_basket_token');
     renderBasket();
 
     // Reset mobile navigation bar to guest states
