@@ -134,29 +134,30 @@
                 </a>
 
                 <!-- Guest controls -->
-                <div id="nav-btn-gate" class="flex items-center gap-2">
+                <div id="nav-btn-gate" class="flex items-center gap-1.5 sm:gap-2">
                     <button onclick="showAuthMode('signin')"
-                        class="px-5 py-2 rounded-full font-body-md text-primary font-medium hover:bg-surface-container transition-all">Login</button>
+                        class="px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full font-body-md text-primary font-medium hover:bg-surface-container transition-all text-xs sm:text-sm">Login</button>
                     <button onclick="showAuthMode('signup')"
-                        class="px-5 py-2 rounded-full bg-primary text-white font-body-md font-bold hover:bg-primary-container transition-all">Sign
-                        Up</button>
+                        class="px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full bg-primary text-white font-body-md font-bold hover:bg-primary-container transition-all text-xs sm:text-sm">Sign Up</button>
                 </div>
 
                 <!-- Logged In profile controls -->
-                <div id="nav-logout-btn" style="display: none;" class="items-center gap-2 lg:gap-4">
+                <div id="nav-logout-btn" style="display: none;" class="items-center gap-1.5 sm:gap-2 lg:gap-4">
                     <div id="profile-indicator"
                         onclick="currentUser.role === 'admin' ? switchTab('admin') : switchTab('customer')"
-                        class="flex items-center gap-2 lg:gap-3 bg-surface-container-low border border-primary/20 px-3 py-1 lg:px-4 lg:py-1.5 rounded-full cursor-pointer hover:bg-white transition-all">
-                        <div class="flex flex-col text-left">
+                        class="flex items-center gap-2 bg-surface-container-low border border-primary/20 p-1 sm:px-3 sm:py-1 rounded-full cursor-pointer hover:bg-white transition-all"
+                        title="View Profile">
+                        <div class="hidden sm:flex flex-col text-left">
                             <span class="text-xs font-bold text-primary profile-name">Guest Mode</span>
                             <span class="text-[9px] text-gray-500 profile-role uppercase">Viewer Mode</span>
                         </div>
-                        <div class="w-8 h-8 rounded-full bg-secondary/15 text-secondary flex items-center justify-center font-bold"
+                        <div class="w-8 h-8 rounded-full bg-secondary/15 text-secondary flex items-center justify-center font-bold flex-shrink-0"
                             id="profile-avatar-letter">G</div>
                     </div>
-                    <button onclick="handleLogout()" class="px-5 py-1.5 rounded-full text-xs font-bold transition-all"
-                        style="color: #7b5800; border: 2px dashed #7b5800; background: transparent;">
-                        Sign Out
+                    <button onclick="handleLogout()" class="flex items-center justify-center w-8 h-8 sm:w-auto sm:h-auto sm:px-5 sm:py-1.5 rounded-full text-xs font-bold transition-all border border-dashed border-[#7b5800]"
+                        style="color: #7b5800; background: transparent;" title="Sign Out">
+                        <span class="hidden sm:inline">Sign Out</span>
+                        <i class="fa-solid fa-right-from-bracket sm:hidden text-[13px]"></i>
                     </button>
                 </div>
             </div>
