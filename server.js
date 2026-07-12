@@ -455,7 +455,7 @@ app.post('/api/users/addresses', authenticateToken, async (req, res) => {
 
 // 5. ORDERS: GET ORDERS (Admin or specific Customer - MAPPED TO CAMELCASE)
 app.get('/api/orders', authenticateToken, async (req, res) => {
-    const { phone, role } = req.query;
+    const { phone } = req.query;
 
     // Verify ownership and roles
     if (req.user.role === 'customer') {
@@ -469,12 +469,11 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 
     try {
         let dbRows = [];
-        if (role === 'admin' || req.user.role === 'admin' || req.user.role === 'valet') {
+        if (req.user.role === 'admin' || req.user.role === 'valet') {
             dbRows = await dbAll('SELECT * FROM orders ORDER BY date DESC, order_id DESC');
-        } else if (phone) {
-            dbRows = await dbAll('SELECT * FROM orders WHERE customer_phone = ? ORDER BY date DESC, order_id DESC', [normalizePhoneNumber(phone)]);
         } else {
-            return res.status(400).json({ error: 'Please supply phone or role query parameter' });
+            const queryPhone = normalizePhoneNumber(phone || req.user.phone);
+            dbRows = await dbAll('SELECT * FROM orders WHERE customer_phone = ? ORDER BY date DESC, order_id DESC', [queryPhone]);
         }
 
         const mappedOrders = dbRows.map(order => ({

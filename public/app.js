@@ -348,8 +348,19 @@ async function syncAppData() {
         return;
     }
 
+    if (!currentUser) {
+        return;
+    }
+
     try {
-        const resAdmin = await fetch(`${API_BASE}/orders?role=admin`);
+        let url = `${API_BASE}/orders`;
+        if (currentUser.role === 'admin' || currentUser.role === 'valet') {
+            url += '?role=admin';
+        } else {
+            url += `?phone=${encodeURIComponent(currentUser.phone)}`;
+        }
+
+        const resAdmin = await fetch(url);
         if (!resAdmin.ok) throw new Error("Sync failed");
         const allOrders = await resAdmin.json();
         
