@@ -4070,3 +4070,185 @@ function onSavedAddressSelectChange() {
 }
 window.onSavedAddressSelectChange = onSavedAddressSelectChange;
 
+function openWalkInOrderModal() {
+    // Reset form
+    document.getElementById('admin-walk-in-form').reset();
+    
+    // Clear status label
+    const statusSpan = document.getElementById('walkin-customer-status');
+    if (statusSpan) {
+        statusSpan.innerText = "Enter phone to search system...";
+        statusSpan.className = "text-[11px] font-bold text-gray-400";
+    }
+
+    // Populate service dropdown dynamically from priceCatalog
+    const select = document.getElementById('walkin-service-select');
+    if (select) {
+        select.innerHTML = '<option value="">-- Choose Service --</option>';
+        for (const code in priceCatalog) {
+            const svc = priceCatalog[code];
+            const option = document.createElement('option');
+            option.value = code;
+            option.innerText = `${svc.name} - ₹${svc.price}/${svc.unit}`;
+            select.appendChild(option);
+        }
+    }
+    
+    // Display total ₹0.00
+    document.getElementById('walkin-billing-total').innerText = '₹0.00';
+    document.getElementById('walkin-rate-calc').innerText = 'No service selected';
+
+    // Show modal
+    document.getElementById('admin-walk-in-modal').style.display = 'flex';
+}
+window.openWalkInOrderModal = openWalkInOrderModal;
+
+function closeWalkInOrderModal() {
+    document.getElementById('admin-walk-in-modal').style.display = 'none';
+}
+window.closeWalkInOrderModal = closeWalkInOrderModal;
+
+function onWalkInServiceChange() {
+    const serviceCode = document.getElementById('walkin-service-select').value;
+    const svc = priceCatalog[serviceCode];
+    
+    const qtyContainer = document.getElementById('walkin-qty-container');
+    const weightContainer = document.getElementById('walkin-weight-container');
+    const unitLabel = document.getElementById('walkin-unit-label');
+    
+    if (svc) {
+        if (svc.unit === 'kg') {
+            if (qtyContainer) qtyContainer.style.display = 'none';
+            if (weightContainer) weightContainer.style.display = 'block';
+        } else {
+            if (qtyContainer) qtyContainer.style.display = 'block';
+            if (weightContainer) weightContainer.style.display = 'none';
+            if (unitLabel) unitLabel.innerText = svc.unit === 'pair' ? 'Pairs' : 'Quantity';
+        }
+    }
+    calculateWalkInPrice();
+}
+window.onWalkInServiceChange = onWalkInServiceChange;
+
+function calculateWalkInPrice() {
+    const serviceCode = document.getElementById('walkin-service-select').value;
+    const svc = priceCatalog[serviceCode];
+    const expressChecked = document.getElementById('walkin-express').checked;
+    
+    let total = 0;
+    let calcStr = 'No service selected';
+    
+    if (svc) {
+        if (svc.unit === 'kg') {
+            const weightVal = parseFloat(document.getElementById('walkin-weight').value) || 0;
+            total = weightVal * svc.price;
+            calcStr = `${weightVal.toFixed(2)} kg x ₹${svc.price}/kg`;
+        } else {
+            const qtyVal = parseInt(document.getElementById('walkin-qty').value) || 1;
+            total = qtyVal * svc.price;
+            calcStr = `${qtyVal} x ₹${svc.price}/${svc.unit}`;
+        }
+        
+        if (expressChecked) {
+            total = total * 1.25;
+            calcStr += ` (+25% Express)`;
+        }
+    }
+    
+    document.getElementById('walkin-billing-total').innerText = `₹${total.toFixed(2)}`;
+    document.getElementById('walkin-rate-calc').innerText = calcStr;
+}
+window.calculateWalkInPrice = calculateWalkInPrice;
+
+function checkWalkInCustomerExist() {
+    const rawPhone = document.getElementById('walkin-phone').value.trim();
+    const phone = normalizePhoneNumber(rawPhone);
+    const statusSpan = document.getElementById('walkin-customer-status');
+    const nameInput = document.getElementById('walkin-name');
+    const emailInput = document.getElementById('walkin-email');
+    
+    const digitsOnly = rawPhone.replace(/\D/g, '');
+    if (digitsOnly.length === 10) {
+        statusSpan.innerText = "Checking customer profile...";
+        statusSpan.className = "text-[11px] font-bold text-secondary animate-pulse";
+        
+        fetch(`${API_BASE}/users/lookup?phone=${encodeURIComponent(phone)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.exists && data.user) {
+                     statusSpan.innerText = `✓ Registered user: ${data.user.name}`;
+                     statusSpan.className = "text-[11px] font-bold text-emerald-600";
+                     if (nameInput) nameInput.value = data.user.name;
+                     if (emailInput) emailInput.value = data.user.email || "";
+                } else {
+                     statusSpan.innerText = `+ New customer (Profile will be auto-generated)`;
+                     statusSpan.className = "text-[11px] font-bold text-amber-600";
+                }
+            })
+            .catch(() => {
+                 statusSpan.innerText = "Error searching system.";
+                 statusSpan.className = "text-[11px] font-bold text-rose-600";
+            });
+    } else {
+         statusSpan.innerText = "Enter 10-digit phone number...";
+         statusSpan.className = "text-[11px] font-bold text-gray-400";
+    }
+}
+window.checkWalkInCustomerExist = checkWalkInCustomerExist;
+
+async function handleWalkInSubmit(e) {
+    e.preventDefault();
+    
+    const phone = document.getElementById('walkin-phone').value.trim();
+    const name = document.getElementById('walkin-name').value.trim();
+    const email = document.getElementById('walkin-email').value.trim();
+    const serviceCode = document.getElementById('walkin-service-select').value;
+    const qty = parseInt(document.getElementById('walkin-qty').value) || 1;
+    const weight = parseFloat(document.getElementById('walkin-weight').value) || 1.0;
+    const isExpress = document.getElementById('walkin-express').checked;
+    const paymentMethod = document.getElementById('walkin-pay-method').value;
+    const paymentStatus = document.getElementById('walkin-pay-status').value;
+    
+    const totalText = document.getElementById('walkin-billing-total').innerText;
+    const amount = parseFloat(totalText.replace('₹', '')) || 0;
+    
+    if (!serviceCode) {
+        showToast("Please choose a laundry service.", "danger");
+        return;
+    }
+    
+    try {
+        const payload = {
+            phone,
+            name,
+            email,
+            serviceCode,
+            qty,
+            weight,
+            isExpress,
+            paymentMethod,
+            paymentStatus,
+            amount
+        };
+        
+        const res = await fetch(`${API_BASE}/admin/orders/walk-in`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(`Walk-In order ${data.orderId} created successfully!`, 'success');
+            closeWalkInOrderModal();
+            syncAppData(); // Refreshes dashboard
+        } else {
+            showToast(data.error || "Failed to create order.", "danger");
+        }
+    } catch(err) {
+        console.error("Walk-in creation error:", err);
+        showToast("Server communication error creating order.", "danger");
+    }
+}
+window.handleWalkInSubmit = handleWalkInSubmit;
+

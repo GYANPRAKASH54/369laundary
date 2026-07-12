@@ -1269,9 +1269,14 @@
                                         class="w-full pl-9 pr-4 py-2 border-gray-200 focus:ring-primary rounded-lg text-xs font-medium placeholder-gray-400 bg-white">
                                 </div>
                                 <button type="button" onclick="openQRScannerModal()"
-                                    class="px-4 py-2 bg-secondary text-white font-bold text-xs rounded-lg hover:bg-opacity-95 flex items-center gap-1.5 shadow-sm transition-colors whitespace-nowrap">
+                                    class="px-3 py-2 bg-secondary text-white font-bold text-xs rounded-lg hover:bg-opacity-95 flex items-center gap-1.5 shadow-sm transition-colors whitespace-nowrap">
                                     <span class="material-symbols-outlined text-sm">qr_code_scanner</span>
                                     Scan Client QR
+                                </button>
+                                <button type="button" onclick="openWalkInOrderModal()"
+                                    class="px-3 py-2 bg-primary text-white font-bold text-xs rounded-lg hover:bg-opacity-95 flex items-center gap-1.5 shadow-sm transition-colors whitespace-nowrap">
+                                    <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+                                    + Walk-In Order
                                 </button>
                             </div>
                             <!-- Status Filter Dropdown -->
@@ -1673,6 +1678,129 @@
 
     <!-- Global Floating Toasts -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- Walk-In Order Creator Modal -->
+    <div id="admin-walk-in-modal" class="fixed inset-0 z-[1100] bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col">
+            <!-- Header -->
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-secondary text-2xl">add_shopping_cart</span>
+                    <div>
+                        <h3 class="text-lg font-bold text-primary">New Walk-In Order & Bill</h3>
+                        <p class="text-xs text-gray-500">Register new or look up existing walk-in customer packages.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeWalkInOrderModal()" class="text-gray-400 hover:text-primary text-2xl font-bold">&times;</button>
+            </div>
+            
+            <!-- Form content -->
+            <form id="admin-walk-in-form" onsubmit="handleWalkInSubmit(event)" class="p-6 space-y-6 flex-grow">
+                <!-- Row 1: Customer Lookup -->
+                <div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-150/80 space-y-4">
+                    <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">1. Customer Identification</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">10-Digit Phone Number</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="walkin-phone" placeholder="8699013959" required
+                                    oninput="checkWalkInCustomerExist()"
+                                    class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm font-semibold">
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Full Name</label>
+                            <input type="text" id="walkin-name" placeholder="John Doe" required
+                                class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm font-semibold">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Email Address (Optional)</label>
+                            <input type="email" id="walkin-email" placeholder="john@example.com"
+                                class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm">
+                        </div>
+                        <div class="flex items-end pb-1.5">
+                            <span id="walkin-customer-status" class="text-[11px] font-bold text-gray-400">Enter phone to search system...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Laundry Selection -->
+                <div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-150/80 space-y-4">
+                    <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">2. Fabric Care Services & Weighing</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Select Service</label>
+                            <select id="walkin-service-select" onchange="onWalkInServiceChange()"
+                                class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm font-semibold bg-white">
+                                <option value="">-- Choose Service --</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1" id="walkin-qty-container" style="display: none;">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block" id="walkin-unit-label">Quantity</label>
+                                <input type="number" id="walkin-qty" value="1" min="1" oninput="calculateWalkInPrice()"
+                                    class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm font-semibold">
+                            </div>
+                            <div class="space-y-1" id="walkin-weight-container">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Weight (kg)</label>
+                                <input type="number" id="walkin-weight" step="0.01" min="0.1" placeholder="4.5" oninput="calculateWalkInPrice()"
+                                    class="w-full border-gray-200 focus:ring-primary rounded-lg py-2 px-3 text-sm font-semibold">
+                            </div>
+                            <div class="flex items-end justify-start pl-2">
+                                <label class="flex items-center gap-1.5 cursor-pointer pb-2">
+                                    <input type="checkbox" id="walkin-express" onchange="calculateWalkInPrice()"
+                                        class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary">
+                                    <span class="text-xs font-bold text-gray-600">Express (+25%)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Total & Payment details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-150/80 space-y-3">
+                        <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">3. Settlement details</h4>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Payment Method</label>
+                                <select id="walkin-pay-method"
+                                    class="w-full border-gray-200 focus:ring-primary rounded-lg py-1.5 px-3 text-xs bg-white font-semibold">
+                                    <option value="Cash">Cash</option>
+                                    <option value="UPI">UPI / QR Scan</option>
+                                    <option value="Card">Card Payment</option>
+                                </select>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Payment Status</label>
+                                <select id="walkin-pay-status"
+                                    class="w-full border-gray-200 focus:ring-primary rounded-lg py-1.5 px-3 text-xs bg-white font-semibold">
+                                    <option value="pending">Pending</option>
+                                    <option value="paid">Paid</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-secondary/5 border border-secondary/20 p-4 rounded-2xl flex flex-col justify-center items-center space-y-1">
+                        <span class="text-[10px] font-extrabold text-secondary uppercase tracking-wider">Walk-In Billing Total</span>
+                        <div class="text-3xl font-black text-secondary" id="walkin-billing-total">₹0.00</div>
+                        <span class="text-[9px] text-gray-500" id="walkin-rate-calc">No service selected</span>
+                    </div>
+                </div>
+                
+                <!-- Action button -->
+                <div class="pt-4 flex gap-4">
+                    <button type="button" onclick="closeWalkInOrderModal()"
+                        class="w-1/2 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-sm transition-all">Cancel</button>
+                    <button type="submit"
+                        class="w-1/2 py-3 bg-primary text-white font-bold rounded-xl text-sm hover:bg-opacity-95 transition-all shadow-md">Generate Bill & ID</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Email Preview Modal -->
     <div id="email-modal" class="email-modal-overlay" onclick="closeEmailModal()">

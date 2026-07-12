@@ -593,6 +593,138 @@ app.delete('/api/admin/users/:phone', async (req, res) => {
     }
 });
 
+// 5.6.5 ADMIN: LOOKUP CUSTOMER BY PHONE
+app.get('/api/users/lookup', authenticateToken, requireRole(['admin']), async (req, res) => {
+    const { phone: rawPhone } = req.query;
+    if (!rawPhone) {
+        return res.status(400).json({ error: 'Phone number is required.' });
+    }
+    const phone = normalizePhoneNumber(rawPhone);
+    try {
+        const user = await dbGet('SELECT id, name, phone, email, role FROM users WHERE phone = ?', [phone]);
+        if (user) {
+            res.json({ exists: true, user });
+        } else {
+            res.json({ exists: false });
+        }
+    } catch(err) {
+        console.error('Lookup user error:', err.message);
+        res.status(500).json({ error: 'Database error looking up user.' });
+    }
+});
+
+// 5.6.6 ADMIN: CREATE WALK-IN ORDER & BILL
+app.post('/api/admin/orders/walk-in', authenticateToken, requireRole(['admin']), async (req, res) => {
+    const {
+        phone: rawPhone,
+        name,
+        email,
+        serviceCode,
+        qty,
+        weight,
+        isExpress,
+        paymentMethod,
+        paymentStatus,
+        amount
+    } = req.body;
+
+    if (!rawPhone || !name || !serviceCode || !amount) {
+        return res.status(400).json({ error: 'Missing required walk-in order fields.' });
+    }
+
+    const phone = normalizePhoneNumber(rawPhone);
+    const cleanName = sanitizeInput(name);
+    const cleanEmail = email ? sanitizeInput(email).toLowerCase().trim() : `${phone.replace(/\+/g, '')}@369laundry.com`;
+    const cleanServiceCode = sanitizeInput(serviceCode);
+    const cleanPayMethod = sanitizeInput(paymentMethod || 'Cash');
+    const cleanPayStatus = sanitizeInput(paymentStatus || 'pending');
+
+    try {
+        // 1. Check/Create User Profile
+        let user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
+        if (!user) {
+            const defaultPassword = hashPassword(phone.replace('+', ''));
+            await dbRun(
+                'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
+                [cleanName, phone, cleanEmail, defaultPassword, 'customer']
+            );
+            user = await dbGet('SELECT * FROM users WHERE phone = ?', [phone]);
+            console.log(`Auto-created customer profile for walk-in: ${cleanName} (${phone})`);
+        }
+
+        // 2. Generate Sequential Order ID
+        let orderId = '';
+        try {
+            const rows = await dbAll("SELECT order_id FROM orders WHERE order_id LIKE 'LX-%'");
+            let maxSeq = 0;
+            rows.forEach(r => {
+                const part = r.order_id.substring(3);
+                const num = parseInt(part, 10);
+                if (!isNaN(num) && num > maxSeq) {
+                    maxSeq = num;
+                }
+            });
+            const nextNum = maxSeq + 1;
+            const padded = String(nextNum).padStart(3, '0');
+            orderId = `LX-${padded}`;
+        } catch (e) {
+            const orderNum = Math.floor(10000 + Math.random() * 90000);
+            orderId = `LX-${orderNum}`;
+        }
+
+        // Get service info from catalog
+        const catalog = servicePrices[cleanServiceCode];
+        if (!catalog) {
+            return res.status(400).json({ error: 'Invalid service code selected.' });
+        }
+
+        const date = new Date().toISOString().split('T')[0];
+        const slot = 'Walk-In (In-Shop)';
+        const address = 'Walk-In (Over-The-Counter)';
+        const addressType = 'other';
+        const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+        const itemsCount = catalog.unit === 'kg' ? 1 : parseInt(qty || 1);
+        const finalWeight = catalog.unit === 'kg' ? parseFloat(weight || 1.0) : 0;
+
+        // 3. Insert order
+        await dbRun(`
+            INSERT INTO orders (
+                order_id, customer_name, customer_phone, customer_email, date, slot, address, address_type, payment, weight, items_count, amount, status, timestamp, latitude, longitude, is_express, payment_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+        `, [
+            orderId, cleanName, phone, cleanEmail, date, slot, address, addressType, cleanPayMethod, finalWeight, itemsCount, parseFloat(amount), 'processing', timestamp, isExpress ? 1 : 0, cleanPayStatus
+        ]);
+
+        // 4. Insert items
+        const serviceLabel = catalog.unit === 'kg' 
+            ? `${catalog.name} (${finalWeight.toFixed(2)} kg)` 
+            : `${catalog.name} (Qty: ${itemsCount})`;
+
+        await dbRun(`
+            INSERT INTO order_items (
+                order_id, name, qty, weight, service_code, service_label, unit_price, total_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            orderId, catalog.name, itemsCount, finalWeight, cleanServiceCode, serviceLabel, catalog.price, parseFloat(amount)
+        ]);
+
+        console.log(`Walk-In order ${orderId} created successfully for ${cleanName}`);
+        
+        const createdOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+        const createdItems = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
+        createdOrder.items = createdItems;
+
+        // Async Email confirmation
+        triggerEmailAsync(createdOrder, 'processing');
+
+        res.status(201).json({ success: true, orderId, user: { name: cleanName, phone, email: cleanEmail } });
+    } catch (err) {
+        console.error('Walk-in order creation failed:', err.message);
+        res.status(500).json({ error: 'Database error creating walk-in order.' });
+    }
+});
+
 // 5.7 ADMIN: GET ALL VALETS
 app.get('/api/admin/valets', async (req, res) => {
     try {
