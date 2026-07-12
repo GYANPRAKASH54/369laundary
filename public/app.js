@@ -64,9 +64,14 @@ let useLocalFallback = false;
         const res = await originalFetch(url, options);
         if (res.status === 401 && typeof url === 'string' && url.includes(API_BASE) && !url.includes('/auth/')) {
             console.warn("Session token expired or invalid. Clearing session.");
-            localStorage.removeItem('369laundary_user');
-            localStorage.removeItem('369laundary_token');
-            if (typeof currentUser !== 'undefined') currentUser = null;
+            showToast("Session expired. Please log in again.", "danger");
+            if (typeof handleLogout === 'function') {
+                handleLogout();
+            } else {
+                localStorage.removeItem('369laundary_user');
+                localStorage.removeItem('369laundary_token');
+                if (typeof currentUser !== 'undefined') currentUser = null;
+            }
         }
         return res;
     };
@@ -4342,6 +4347,71 @@ async function handleWalkInSubmit(e) {
     const totalText = document.getElementById('walkin-billing-total').innerText;
     const amount = parseFloat(totalText.replace('₹', '')) || 0;
     
+    if (useLocalFallback) {
+        // Generate a random order ID
+        const orderNum = Math.floor(10000 + Math.random() * 90000);
+        const orderId = `LX-${orderNum}`;
+        
+        const date = new Date().toISOString().split('T')[0];
+        const slot = 'Walk-In (In-Shop)';
+        const address = 'Walk-In (Over-The-Counter)';
+        const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+        let totalItemsCount = 0;
+        let totalWeight = 0;
+        let isExpressAny = 0;
+        let orderItems = [];
+
+        walkInCart.forEach(item => {
+            if (item.unit === 'kg') {
+                totalWeight += item.weight;
+                totalItemsCount += 1;
+            } else {
+                totalItemsCount += item.qty;
+            }
+            if (item.isExpress) isExpressAny = 1;
+
+            orderItems.push({
+                orderId,
+                name: item.name,
+                qty: item.unit === 'kg' ? 1 : item.qty,
+                weight: item.unit === 'kg' ? item.weight : 0,
+                serviceCode: item.serviceCode,
+                serviceLabel: item.unit === 'kg' ? `${item.name} (${item.weight.toFixed(2)} kg)` : `${item.name} (Qty: ${item.qty})`,
+                unitPrice: priceCatalog[item.serviceCode].price,
+                totalPrice: item.price
+            });
+        });
+
+        const newOrder = {
+            orderId,
+            customerName: name,
+            customerPhone: phone,
+            customerEmail: email || `${phone.replace(/\+/g, '')}@369laundry.com`,
+            date,
+            slot,
+            address,
+            addressType: 'other',
+            payment: paymentMethod,
+            weight: totalWeight,
+            itemsCount: totalItemsCount,
+            amount,
+            status: 'processing',
+            timestamp,
+            latitude: 0,
+            longitude: 0,
+            isExpress: isExpressAny,
+            paymentStatus,
+            items: orderItems
+        };
+
+        orders.unshift(newOrder);
+        showToast(`Walk-In order ${orderId} created successfully (Simulated memory mode)!`, 'success');
+        closeWalkInOrderModal();
+        syncAppData(); // Refreshes UI
+        return;
+    }
+
     try {
         const payload = {
             phone,
