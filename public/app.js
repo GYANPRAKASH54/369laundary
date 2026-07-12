@@ -61,7 +61,14 @@ let useLocalFallback = false;
                 }
             }
         }
-        return originalFetch(url, options);
+        const res = await originalFetch(url, options);
+        if (res.status === 401 && typeof url === 'string' && url.includes(API_BASE) && !url.includes('/auth/')) {
+            console.warn("Session token expired or invalid. Clearing session.");
+            localStorage.removeItem('369laundary_user');
+            localStorage.removeItem('369laundary_token');
+            if (typeof currentUser !== 'undefined') currentUser = null;
+        }
+        return res;
     };
 })();
 
