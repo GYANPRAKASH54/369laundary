@@ -148,6 +148,17 @@ app.get('/api/ping', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Database health check endpoint
+app.get('/api/health', async (req, res) => {
+    try {
+        await dbGet('SELECT 1');
+        res.status(200).json({ status: 'ok', database: 'connected' });
+    } catch (err) {
+        console.error('Health check failed:', err.message);
+        res.status(500).json({ status: 'error', message: 'Database connection failed: ' + err.message });
+    }
+});
+
 // Initialize SQLite database
 initDb();
 

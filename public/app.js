@@ -317,7 +317,7 @@ function switchTab(tabName) {
 // BACKEND CONNECTIVITY & SYNC HELPERS
 async function checkBackendConnection() {
     try {
-        const response = await fetch(`${API_BASE}/orders?role=admin`);
+        const response = await fetch(`${API_BASE}/health`);
         if (response.ok) {
             console.log("Connected to 369 Laundry Backend Server.");
             useLocalFallback = false;
