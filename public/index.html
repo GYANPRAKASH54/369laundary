@@ -1726,9 +1726,9 @@
                     </div>
                 </div>
 
-                <!-- Row 2: Laundry Selection -->
+                <!-- Row 2: Add Service Item -->
                 <div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-150/80 space-y-4">
-                    <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">2. Fabric Care Services & Weighing</h4>
+                    <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">2. Add Fabric Care Services</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Select Service</label>
@@ -1757,12 +1757,43 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Add Item Button & Live Estimate -->
+                    <div class="flex justify-between items-center border-t border-gray-150 pt-3">
+                        <span class="text-xs font-bold text-gray-500" id="walkin-rate-calc">No service selected</span>
+                        <button type="button" onclick="addWalkInItem()"
+                            class="px-4 py-1.5 bg-secondary text-white font-bold text-xs rounded-lg hover:bg-opacity-95 flex items-center gap-1 shadow-sm transition-all">
+                            <span class="material-symbols-outlined text-xs font-bold">add</span>
+                            Add Item
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Row 2.5: Cart Table of Added Items -->
+                <div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-150/80 space-y-3">
+                    <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">3. Added Items Checklist</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs font-medium text-gray-600">
+                            <thead>
+                                <tr class="border-b border-gray-200 text-gray-400">
+                                    <th class="py-2">Service</th>
+                                    <th class="py-2">Qty/Weight</th>
+                                    <th class="py-2 text-right">Price</th>
+                                    <th class="py-2 text-center w-12">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="walkin-items-table-body">
+                                <tr>
+                                    <td colspan="4" class="py-4 text-center text-gray-400">No items added to this bill yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Row 3: Total & Payment details -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-150/80 space-y-3">
-                        <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">3. Settlement details</h4>
+                        <h4 class="text-xs font-extrabold text-primary uppercase tracking-wider">4. Settlement details</h4>
                         <div class="grid grid-cols-2 gap-3">
                             <div class="space-y-1">
                                 <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Payment Method</label>
@@ -1787,7 +1818,7 @@
                     <div class="bg-secondary/5 border border-secondary/20 p-4 rounded-2xl flex flex-col justify-center items-center space-y-1">
                         <span class="text-[10px] font-extrabold text-secondary uppercase tracking-wider">Walk-In Billing Total</span>
                         <div class="text-3xl font-black text-secondary" id="walkin-billing-total">₹0.00</div>
-                        <span class="text-[9px] text-gray-500" id="walkin-rate-calc">No service selected</span>
+                        <span class="text-[9px] text-gray-500 font-bold" id="walkin-cart-summary">0 items added</span>
                     </div>
                 </div>
                 

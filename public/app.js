@@ -4088,9 +4088,13 @@ function onSavedAddressSelectChange() {
 }
 window.onSavedAddressSelectChange = onSavedAddressSelectChange;
 
+let walkInCart = [];
+
 function openWalkInOrderModal() {
     // Reset form
     document.getElementById('admin-walk-in-form').reset();
+    walkInCart = [];
+    renderWalkInCart();
     
     // Clear status label
     const statusSpan = document.getElementById('walkin-customer-status');
@@ -4173,10 +4177,117 @@ function calculateWalkInPrice() {
         }
     }
     
-    document.getElementById('walkin-billing-total').innerText = `₹${total.toFixed(2)}`;
     document.getElementById('walkin-rate-calc').innerText = calcStr;
 }
 window.calculateWalkInPrice = calculateWalkInPrice;
+
+function addWalkInItem() {
+    const serviceCode = document.getElementById('walkin-service-select').value;
+    if (!serviceCode) {
+        showToast("Please select a service first.", "warning");
+        return;
+    }
+    const svc = priceCatalog[serviceCode];
+    if (!svc) return;
+
+    const expressChecked = document.getElementById('walkin-express').checked;
+    let qty = 1;
+    let weight = 0;
+    let price = 0;
+
+    if (svc.unit === 'kg') {
+        weight = parseFloat(document.getElementById('walkin-weight').value) || 0;
+        if (weight <= 0) {
+            showToast("Please enter a valid weight.", "warning");
+            return;
+        }
+        price = weight * svc.price;
+    } else {
+        qty = parseInt(document.getElementById('walkin-qty').value) || 1;
+        if (qty <= 0) {
+            showToast("Please enter a valid quantity.", "warning");
+            return;
+        }
+        price = qty * svc.price;
+    }
+
+    if (expressChecked) {
+        price = price * 1.25;
+    }
+
+    // Add to cart array
+    walkInCart.push({
+        serviceCode,
+        name: svc.name,
+        unit: svc.unit,
+        qty,
+        weight,
+        isExpress: expressChecked,
+        price: parseFloat(price.toFixed(2))
+    });
+
+    renderWalkInCart();
+    showToast(`Added ${svc.name} to bill.`, "success");
+
+    // Reset selectors
+    document.getElementById('walkin-service-select').value = "";
+    document.getElementById('walkin-qty').value = "1";
+    document.getElementById('walkin-weight').value = "";
+    document.getElementById('walkin-express').checked = false;
+    document.getElementById('walkin-rate-calc').innerText = 'No service selected';
+    if (document.getElementById('walkin-qty-container')) {
+        document.getElementById('walkin-qty-container').style.display = 'none';
+    }
+    if (document.getElementById('walkin-weight-container')) {
+        document.getElementById('walkin-weight-container').style.display = 'block';
+    }
+}
+window.addWalkInItem = addWalkInItem;
+
+function removeWalkInItem(index) {
+    walkInCart.splice(index, 1);
+    renderWalkInCart();
+    showToast("Item removed from bill.", "warning");
+}
+window.removeWalkInItem = removeWalkInItem;
+
+function renderWalkInCart() {
+    const tbody = document.getElementById('walkin-items-table-body');
+    if (!tbody) return;
+
+    if (walkInCart.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="py-4 text-center text-gray-400">No items added to this bill yet.</td>
+            </tr>`;
+        document.getElementById('walkin-billing-total').innerText = '₹0.00';
+        document.getElementById('walkin-cart-summary').innerText = '0 items added';
+        return;
+    }
+
+    let html = '';
+    let grandTotal = 0;
+    walkInCart.forEach((item, index) => {
+        const spec = item.unit === 'kg' ? `${item.weight.toFixed(2)} kg` : `${item.qty} ${item.unit}`;
+        const expressTag = item.isExpress ? ' <span class="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded ml-1">Express</span>' : '';
+        html += `
+            <tr class="border-b border-gray-100">
+                <td class="py-2.5 font-semibold text-primary">${item.name}${expressTag}</td>
+                <td class="py-2.5 font-bold text-gray-500">${spec}</td>
+                <td class="py-2.5 text-right font-extrabold text-secondary">₹${item.price.toFixed(2)}</td>
+                <td class="py-2.5 text-center">
+                    <button type="button" onclick="removeWalkInItem(${index})"
+                        class="text-rose-500 hover:text-rose-700 font-bold material-symbols-outlined text-sm">delete</button>
+                </td>
+            </tr>`;
+        grandTotal += item.price;
+    });
+
+    tbody.innerHTML = html;
+    document.getElementById('walkin-billing-total').innerText = `₹${grandTotal.toFixed(2)}`;
+    document.getElementById('walkin-cart-summary').innerText = `${walkInCart.length} item(s) added`;
+}
+window.renderWalkInCart = renderWalkInCart;
 
 function checkWalkInCustomerExist() {
     const rawPhone = document.getElementById('walkin-phone').value.trim();
@@ -4220,30 +4331,23 @@ async function handleWalkInSubmit(e) {
     const phone = document.getElementById('walkin-phone').value.trim();
     const name = document.getElementById('walkin-name').value.trim();
     const email = document.getElementById('walkin-email').value.trim();
-    const serviceCode = document.getElementById('walkin-service-select').value;
-    const qty = parseInt(document.getElementById('walkin-qty').value) || 1;
-    const weight = parseFloat(document.getElementById('walkin-weight').value) || 1.0;
-    const isExpress = document.getElementById('walkin-express').checked;
     const paymentMethod = document.getElementById('walkin-pay-method').value;
     const paymentStatus = document.getElementById('walkin-pay-status').value;
     
-    const totalText = document.getElementById('walkin-billing-total').innerText;
-    const amount = parseFloat(totalText.replace('₹', '')) || 0;
-    
-    if (!serviceCode) {
-        showToast("Please choose a laundry service.", "danger");
+    if (walkInCart.length === 0) {
+        showToast("Please add at least one item to the walk-in bill.", "danger");
         return;
     }
+    
+    const totalText = document.getElementById('walkin-billing-total').innerText;
+    const amount = parseFloat(totalText.replace('₹', '')) || 0;
     
     try {
         const payload = {
             phone,
             name,
             email,
-            serviceCode,
-            qty,
-            weight,
-            isExpress,
+            items: walkInCart,
             paymentMethod,
             paymentStatus,
             amount

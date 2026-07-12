@@ -629,23 +629,19 @@ app.post('/api/admin/orders/walk-in', authenticateToken, requireRole(['admin']),
         phone: rawPhone,
         name,
         email,
-        serviceCode,
-        qty,
-        weight,
-        isExpress,
+        items,
         paymentMethod,
         paymentStatus,
         amount
     } = req.body;
 
-    if (!rawPhone || !name || !serviceCode || !amount) {
-        return res.status(400).json({ error: 'Missing required walk-in order fields.' });
+    if (!rawPhone || !name || !items || !Array.isArray(items) || items.length === 0 || !amount) {
+        return res.status(400).json({ error: 'Missing required walk-in order fields or empty items list.' });
     }
 
     const phone = normalizePhoneNumber(rawPhone);
     const cleanName = sanitizeInput(name);
     const cleanEmail = email ? sanitizeInput(email).toLowerCase().trim() : `${phone.replace(/\+/g, '')}@369laundry.com`;
-    const cleanServiceCode = sanitizeInput(serviceCode);
     const cleanPayMethod = sanitizeInput(paymentMethod || 'Cash');
     const cleanPayStatus = sanitizeInput(paymentStatus || 'pending');
 
@@ -682,20 +678,32 @@ app.post('/api/admin/orders/walk-in', authenticateToken, requireRole(['admin']),
             orderId = `LX-${orderNum}`;
         }
 
-        // Get service info from catalog
-        const catalog = servicePrices[cleanServiceCode];
-        if (!catalog) {
-            return res.status(400).json({ error: 'Invalid service code selected.' });
-        }
-
         const date = new Date().toISOString().split('T')[0];
         const slot = 'Walk-In (In-Shop)';
         const address = 'Walk-In (Over-The-Counter)';
         const addressType = 'other';
         const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-        const itemsCount = catalog.unit === 'kg' ? 1 : parseInt(qty || 1);
-        const finalWeight = catalog.unit === 'kg' ? parseFloat(weight || 1.0) : 0;
+        let totalItemsCount = 0;
+        let totalWeight = 0;
+        let isExpressAny = 0;
+
+        // Verify items and calculate statistics
+        for (const item of items) {
+            const catalog = servicePrices[item.serviceCode];
+            if (!catalog) {
+                return res.status(400).json({ error: `Invalid service code: ${item.serviceCode}` });
+            }
+            if (catalog.unit === 'kg') {
+                totalWeight += parseFloat(item.weight || 0);
+                totalItemsCount += 1;
+            } else {
+                totalItemsCount += parseInt(item.qty || 1);
+            }
+            if (item.isExpress) {
+                isExpressAny = 1;
+            }
+        }
 
         // 3. Insert order
         await dbRun(`
@@ -703,23 +711,31 @@ app.post('/api/admin/orders/walk-in', authenticateToken, requireRole(['admin']),
                 order_id, customer_name, customer_phone, customer_email, date, slot, address, address_type, payment, weight, items_count, amount, status, timestamp, latitude, longitude, is_express, payment_status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
         `, [
-            orderId, cleanName, phone, cleanEmail, date, slot, address, addressType, cleanPayMethod, finalWeight, itemsCount, parseFloat(amount), 'processing', timestamp, isExpress ? 1 : 0, cleanPayStatus
+            orderId, cleanName, phone, cleanEmail, date, slot, address, addressType, cleanPayMethod, totalWeight, totalItemsCount, parseFloat(amount), 'processing', timestamp, isExpressAny, cleanPayStatus
         ]);
 
         // 4. Insert items
-        const serviceLabel = catalog.unit === 'kg' 
-            ? `${catalog.name} (${finalWeight.toFixed(2)} kg)` 
-            : `${catalog.name} (Qty: ${itemsCount})`;
+        for (const item of items) {
+            const catalog = servicePrices[item.serviceCode];
+            const cleanSvcCode = sanitizeInput(item.serviceCode);
+            const itemsCount = catalog.unit === 'kg' ? 1 : parseInt(item.qty || 1);
+            const finalWeight = catalog.unit === 'kg' ? parseFloat(item.weight || 1.0) : 0;
+            const finalItemPrice = parseFloat(item.price || 0);
 
-        await dbRun(`
-            INSERT INTO order_items (
-                order_id, name, qty, weight, service_code, service_label, unit_price, total_price
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-            orderId, catalog.name, itemsCount, finalWeight, cleanServiceCode, serviceLabel, catalog.price, parseFloat(amount)
-        ]);
+            const serviceLabel = catalog.unit === 'kg' 
+                ? `${catalog.name} (${finalWeight.toFixed(2)} kg)` 
+                : `${catalog.name} (Qty: ${itemsCount})`;
 
-        console.log(`Walk-In order ${orderId} created successfully for ${cleanName}`);
+            await dbRun(`
+                INSERT INTO order_items (
+                    order_id, name, qty, weight, service_code, service_label, unit_price, total_price
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                orderId, catalog.name, itemsCount, finalWeight, cleanSvcCode, serviceLabel, catalog.price, finalItemPrice
+            ]);
+        }
+
+        console.log(`Multi-item Walk-In order ${orderId} created successfully for ${cleanName}`);
         
         const createdOrder = await dbGet('SELECT * FROM orders WHERE order_id = ?', [orderId]);
         const createdItems = await dbAll('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
