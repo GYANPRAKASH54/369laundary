@@ -109,7 +109,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'self' http://localhost:3000 https://*.vercel.app; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://api.qrserver.com https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' http://localhost:3000 https://*.vercel.app https://unpkg.com; media-src 'self';");
+    res.setHeader('Content-Security-Policy', "default-src 'self' http://localhost:3000 https://*.vercel.app; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://api.qrserver.com https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' http://localhost:3000 https://*.vercel.app https://unpkg.com https://cdn.jsdelivr.net; media-src 'self';");
     next();
 });
 
