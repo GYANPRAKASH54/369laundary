@@ -1226,7 +1226,7 @@ async function handleNewBooking(e) {
         totalPrice = totalPrice * 1.25;
     }
 
-    let orderId = `LX-${Math.floor(10000 + Math.random() * 90000)}`;
+    let orderId = `369-${Math.floor(100 + Math.random() * 900)}`;
     if (!useLocalFallback) {
         try {
             const nextRes = await fetch(`${API_BASE}/orders/next-id`);
@@ -1242,8 +1242,8 @@ async function handleNewBooking(e) {
     } else {
         let maxSeq = 0;
         orders.forEach(o => {
-            if (o.orderId && o.orderId.startsWith('LX-')) {
-                const part = o.orderId.substring(3);
+            if (o.orderId && o.orderId.startsWith('369-')) {
+                const part = o.orderId.substring(4);
                 const num = parseInt(part, 10);
                 if (!isNaN(num) && num > maxSeq) {
                     maxSeq = num;
@@ -1251,7 +1251,7 @@ async function handleNewBooking(e) {
             }
         });
         const nextNum = maxSeq + 1;
-        orderId = `LX-${String(nextNum).padStart(3, '0')}`;
+        orderId = `369-${String(nextNum).padStart(3, '0')}`;
     }
 
     const newOrder = {
@@ -1496,7 +1496,7 @@ async function trackLandingOrder(optOrder) {
             <div style="text-align: center; padding: 20px; color: var(--color-ink-black);">
                 <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: var(--color-coral-pulse); margin-bottom: 10px;"></i>
                 <h4 style="margin: 0 0 5px 0;">Order Not Found</h4>
-                <p style="margin: 0; font-size: 14px; opacity: 0.8;">Double check the reference code (e.g. LX-12345) and try again.</p>
+                <p style="margin: 0; font-size: 14px; opacity: 0.8;">Double check the reference code (e.g. 369-001) and try again.</p>
             </div>
         `;
         return;
@@ -4349,8 +4349,8 @@ async function handleWalkInSubmit(e) {
     
     if (useLocalFallback) {
         // Generate a random order ID
-        const orderNum = Math.floor(10000 + Math.random() * 90000);
-        const orderId = `LX-${orderNum}`;
+        const orderNum = Math.floor(100 + Math.random() * 900);
+        const orderId = `369-${orderNum}`;
         
         const date = new Date().toISOString().split('T')[0];
         const slot = 'Walk-In (In-Shop)';

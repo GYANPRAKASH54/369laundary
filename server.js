@@ -666,10 +666,10 @@ app.post('/api/admin/orders/walk-in', authenticateToken, requireRole(['admin']),
         // 2. Generate Sequential Order ID
         let orderId = '';
         try {
-            const rows = await dbAll("SELECT order_id FROM orders WHERE order_id LIKE 'LX-%'");
+            const rows = await dbAll("SELECT order_id FROM orders WHERE order_id LIKE '369-%'");
             let maxSeq = 0;
             rows.forEach(r => {
-                const part = r.order_id.substring(3);
+                const part = r.order_id.substring(4);
                 const num = parseInt(part, 10);
                 if (!isNaN(num) && num > maxSeq) {
                     maxSeq = num;
@@ -677,10 +677,10 @@ app.post('/api/admin/orders/walk-in', authenticateToken, requireRole(['admin']),
             });
             const nextNum = maxSeq + 1;
             const padded = String(nextNum).padStart(3, '0');
-            orderId = `LX-${padded}`;
+            orderId = `369-${padded}`;
         } catch (e) {
-            const orderNum = Math.floor(10000 + Math.random() * 90000);
-            orderId = `LX-${orderNum}`;
+            const orderNum = Math.floor(100 + Math.random() * 900);
+            orderId = `369-${orderNum}`;
         }
 
         const date = new Date().toISOString().split('T')[0];
@@ -797,6 +797,29 @@ app.post('/api/admin/valets', authenticateToken, requireRole(['admin']), async (
     }
 });
 
+// 5.9 ORDERS: GET NEXT SEQUENTIAL ORDER ID
+app.get('/api/orders/next-id', async (req, res) => {
+    try {
+        const rows = await dbAll("SELECT order_id FROM orders WHERE order_id LIKE '369-%'");
+        let maxSeq = 0;
+        rows.forEach(r => {
+            const part = r.order_id.substring(4); // Remove '369-'
+            const num = parseInt(part, 10);
+            if (!isNaN(num) && num > maxSeq) {
+                maxSeq = num;
+            }
+        });
+        const nextNum = maxSeq + 1;
+        const padded = String(nextNum).padStart(3, '0');
+        res.json({ orderId: `369-${padded}` });
+    } catch (err) {
+        console.error("Error generating next sequential order ID:", err.message);
+        // Fallback to safe random value
+        const orderNum = Math.floor(100 + Math.random() * 900);
+        res.json({ orderId: `369-${orderNum}` });
+    }
+});
+
 // 5.5 ORDERS: GET SINGLE ORDER BY ID (Public lookup for landing page tracking)
 app.get('/api/orders/:orderId', async (req, res) => {
     const { orderId } = req.params;
@@ -847,28 +870,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
     }
 });
 
-// 5.9 ORDERS: GET NEXT SEQUENTIAL ORDER ID
-app.get('/api/orders/next-id', async (req, res) => {
-    try {
-        const rows = await dbAll("SELECT order_id FROM orders WHERE order_id LIKE 'LX-%'");
-        let maxSeq = 0;
-        rows.forEach(r => {
-            const part = r.order_id.substring(3); // Remove 'LX-'
-            const num = parseInt(part, 10);
-            if (!isNaN(num) && num > maxSeq) {
-                maxSeq = num;
-            }
-        });
-        const nextNum = maxSeq + 1;
-        const padded = String(nextNum).padStart(3, '0');
-        res.json({ orderId: `LX-${padded}` });
-    } catch (err) {
-        console.error("Error generating next sequential order ID:", err.message);
-        // Fallback to safe random value
-        const orderNum = Math.floor(10000 + Math.random() * 90000);
-        res.json({ orderId: `LX-${orderNum}` });
-    }
-});
+
 
 // 6. ORDERS: PLACE ORDER
 app.post('/api/orders', authenticateToken, async (req, res) => {
