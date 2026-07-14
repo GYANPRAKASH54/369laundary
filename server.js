@@ -11,7 +11,7 @@ const compression = require('compression');
 const crypto = require('crypto');
 
 // Generate static secret key based on env or generate a persistent fallback
-const TOKEN_SECRET = process.env.TOKEN_SECRET || "1cd9723ef97f0a39ffd9b711ae3d38d7be79b74f001726a55b66d8b22"; // 64 chars hex
+const TOKEN_SECRET = process.env.TOKEN_SECRET || "1cd9723ef97f0a39ffd9b711ae3d38d7be79b74f001726a55b66d8b220000000"; // 64 chars hex
 
 // Cryptographic token encryption/decryption (AES-256-CBC)
 function createToken(payload) {
@@ -141,6 +141,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Serve index.html at root
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Custom favicon handler serving the premium brand logo
+app.get('/favicon.ico', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'components', 'Brand_Logo.PNG'));
 });
 
 // Lightweight ping endpoint to warm serverless function
